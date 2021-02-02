@@ -1,0 +1,70 @@
+menu "APPLICATION CONFIGURATION"
+
+    config LED_IO
+        int "LED GPIO number"
+        range 0 34
+        default 2
+        help
+            GPIO number (IOxx) to blink on and off.
+
+            Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
+
+            GPIOs 35-39 are input-only so cannot be used as outputs.
+
+    config WIFI_CHANNEL
+        int "WIFI Channel for beacon"
+        range 1 14
+        default 6
+        help
+            Use 6 by default
+
+    config GPS_RX_IO
+        int "GPS RX GPIO number"
+        range 0 34
+        default 16
+        help
+            GPIO number (IOxx) to use to recieve GPS data
+
+    config GPS_TX_IO
+        int "GPS TX GPIO number"
+        range 0 34
+        default 17
+        help
+            GPIO number (IOxx) to use to send data to GPS
+
+    config GROUP_MSB_IO
+        int "Model Group MSB GPIO number"
+        range 0 34
+        default 26
+        help
+            GPIO number (IOxx) to use
+
+    config GROUP_LSB_IO
+        int "Model Group LSB GPIO number"
+        range 0 34
+        default 27
+        help
+            GPIO number (IOxx) to use
+
+    config MASS_MSB_IO
+        int "Model Weigh Class MSB GPIO number"
+        range 0 34
+        default 14
+        help
+            GPIO number (IOxx) to use
+
+    config MASS_LSB_IO
+        int "Model Weigh Class LSB GPIO number"
+        range 0 34
+        default 12
+        help
+            GPIO number (IOxx) to use
+
+    config PPS_IO
+        int "GPS PPS GPIO number"
+        range 0 34
+        default 5
+        help
+            GPIO number (IOxx) to use to recieve PPS signal from GPS
+
+endmenu
