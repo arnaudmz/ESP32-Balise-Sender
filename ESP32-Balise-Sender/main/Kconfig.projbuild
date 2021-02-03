@@ -1,70 +1,89 @@
-menu "APPLICATION CONFIGURATION"
+menu "BEACON CONFIGURATION"
 
-    config LED_IO
+    choice BEACON_GPS_MODEL
+        prompt "GPS Model"
+        default BEACON_GPS_BN_220
+        help
+            The partition table to flash to the ESP32. The partition table
+            determines where apps, data and other resources are expected to
+            be found.
+
+            The predefined partition table CSV descriptions can be found
+            in the components/partition_table directory. Otherwise it's
+            possible to create a new custom partition CSV for your application.
+
+        config BEACON_GPS_BN_220
+            bool "BN-220 (preconfigured in 115200)"
+            help
+                Must be preconfigured in 115200 bauds and to send only GNRMC and GNGGA NMEA
+                messages
+        config BEACON_GPS_L80R
+            bool "L80R"
+            help
+                Will be auto-configured at boot time
+    endchoice
+
+    config BEACON_LED_IO
         int "LED GPIO number"
         range 0 34
         default 2
         help
             GPIO number (IOxx) to blink on and off.
 
-            Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
-
-            GPIOs 35-39 are input-only so cannot be used as outputs.
-
-    config WIFI_CHANNEL
+    config BEACON_WIFI_CHANNEL
         int "WIFI Channel for beacon"
         range 1 14
         default 6
         help
             Use 6 by default
 
-    config GPS_RX_IO
-        int "GPS RX GPIO number"
+    config BEACON_GPS_RX_IO
+        int "GPS RX GPIO number" if BEACON_GPS_L80R
         range 0 34
         default 16
         help
             GPIO number (IOxx) to use to recieve GPS data
 
-    config GPS_TX_IO
-        int "GPS TX GPIO number"
+    config BEACON_GPS_TX_IO
+        int "GPS TX GPIO number" if BEACON_GPS_L80R
         range 0 34
         default 17
         help
             GPIO number (IOxx) to use to send data to GPS
+    
+    config BEACON_GPS_PPS_IO
+        int "GPS PPS GPIO number" if BEACON_GPS_L80R
+        range 0 34
+        default 5
+        help
+            GPIO number (IOxx) to use to recieve PPS signal from GPS
 
-    config GROUP_MSB_IO
+    config BEACON_GROUP_MSB_IO
         int "Model Group MSB GPIO number"
         range 0 34
         default 26
         help
             GPIO number (IOxx) to use
 
-    config GROUP_LSB_IO
+    config BEACON_GROUP_LSB_IO
         int "Model Group LSB GPIO number"
         range 0 34
         default 27
         help
             GPIO number (IOxx) to use
 
-    config MASS_MSB_IO
+    config BEACON_MASS_MSB_IO
         int "Model Weigh Class MSB GPIO number"
         range 0 34
         default 14
         help
             GPIO number (IOxx) to use
 
-    config MASS_LSB_IO
+    config BEACON_MASS_LSB_IO
         int "Model Weigh Class LSB GPIO number"
         range 0 34
         default 12
         help
             GPIO number (IOxx) to use
-
-    config PPS_IO
-        int "GPS PPS GPIO number"
-        range 0 34
-        default 5
-        help
-            GPIO number (IOxx) to use to recieve PPS signal from GPS
 
 endmenu

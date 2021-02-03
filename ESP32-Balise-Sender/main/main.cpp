@@ -11,22 +11,27 @@
 #include "nvs_flash.h"
 #include "string.h"
 
-#include "droneID_FR.h"
+static const char* TAG = "Main";
 #include "TinyGPS++.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-//#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
-#define MOCK_GPS
+#include "droneID_FR.h"
+//#define MOCK_GPS
 
 #define WIFI_CHANNEL CONFIG_WIFI_CHANNEL
-#define GPS_RX_IO    (gpio_num_t)CONFIG_GPS_RX_IO
-#define GPS_TX_IO    (gpio_num_t)CONFIG_GPS_TX_IO
-#define GROUP_MSB_IO (gpio_num_t)CONFIG_GROUP_MSB_IO
-#define GROUP_LSB_IO (gpio_num_t)CONFIG_GROUP_LSB_IO
-#define MASS_MSB_IO  (gpio_num_t)CONFIG_MASS_MSB_IO
-#define MASS_LSB_IO  (gpio_num_t)CONFIG_MASS_LSB_IO
-#define PPS_IO       (gpio_num_t)CONFIG_PPS_IO
-#define LED_IO       (gpio_num_t)CONFIG_LED_IO
+
+#ifdef CONFIG_BEACON_GPS_L80R
+#define GPS_RX_IO    (gpio_num_t)CONFIG_BEACON_GPS_RX_IO
+#define GPS_TX_IO    (gpio_num_t)CONFIG_BEACON_GPS_TX_IO
+#define PPS_IO       (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO
+#endif
+
+#define GROUP_MSB_IO (gpio_num_t)CONFIG_BEACON_GROUP_MSB_IO
+#define GROUP_LSB_IO (gpio_num_t)CONFIG_BEACON_GROUP_LSB_IO
+#define MASS_MSB_IO  (gpio_num_t)CONFIG_BEACON_MASS_MSB_IO
+#define MASS_LSB_IO  (gpio_num_t)CONFIG_BEACON_MASS_LSB_IO
+#define LED_IO       (gpio_num_t)CONFIG_BEACON_LED_IO
 
 #define GPS_BAUD_RATE 115200
 #define mS_TO_S_FACTOR 1000
@@ -72,7 +77,6 @@ droneIDFR drone_idfr;
 char ssid[32];
 char mac_str[13];
 char drone_id[33];
-static const char* TAG = "Main";
 
 esp_err_t event_handler(void *ctx, system_event_t *event) {
   return ESP_OK;
@@ -178,7 +182,7 @@ void handle_data() {
 
 void low_power() {
   ESP_LOGD(TAG, "Sleep");
-#ifdef GPS_MODEL_L80_R
+#ifdef CONFIG_BEACON_GPS_L80R
   gpio_wakeup_enable(PPS_IO, GPIO_INTR_HIGH_LEVEL);
   esp_sleep_enable_gpio_wakeup();
   esp_light_sleep_start();
@@ -187,9 +191,11 @@ void low_power() {
   esp_sleep_enable_gpio_wakeup();
   esp_light_sleep_start();
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
-#else
+#endif
+#ifdef CONFIG_BEACON_GPS_BN_220
+  uart_set_wakeup_threshold(UART_NUM_1, 3);
+  esp_sleep_enable_uart_wakeup(UART_NUM_1);
   esp_sleep_enable_gpio_wakeup();
-  esp_sleep_enable_timer_wakeup(950 * mS_TO_S_FACTOR);
   esp_light_sleep_start();
 #endif
   ESP_LOGD(TAG, "Wakeup");
@@ -203,12 +209,19 @@ void uart_setup() {
     .stop_bits = UART_STOP_BITS_1,
     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
     .rx_flow_ctrl_thresh = 0,
-    .source_clk = UART_SCLK_APB,
+    .source_clk = UART_SCLK_REF_TICK,
   };
   // We won't use a buffer for sending data.
   ESP_ERROR_CHECK( uart_driver_install(UART_NUM_1, RX_BUF_SIZE * 2, 0, 0, NULL, 0) );
   ESP_ERROR_CHECK( uart_param_config(UART_NUM_1, &uart_config) );
+#ifdef CONFIG_BEACON_GPS_BN_220
+  ESP_ERROR_CHECK( uart_set_pin(UART_NUM_1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+  PIN_FUNC_SELECT(PERIPHS_IO_MUX_SD_DATA2_U, FUNC_SD_DATA2_U1RXD);
+  PIN_FUNC_SELECT(PERIPHS_IO_MUX_SD_DATA3_U, FUNC_SD_DATA3_U1TXD);
+#endif
+#ifdef CONFIG_BEACON_GPS_L80R
   ESP_ERROR_CHECK( uart_set_pin(UART_NUM_1, GPS_TX_IO, GPS_RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+#endif
 }
 
 void setup() {
@@ -247,7 +260,7 @@ void loop() {
   uint8_t c;
   int nb_chars;
   do {
-    nb_chars = uart_read_bytes(UART_NUM_1, &c, 1, 5 / portTICK_RATE_MS);
+    nb_chars = uart_read_bytes(UART_NUM_1, &c, 1, 10 / portTICK_RATE_MS);
     if(nb_chars > 0) {
       ESP_LOGD(TAG, "%c", c);
       gps.encode(c);
@@ -255,6 +268,15 @@ void loop() {
   } while(nb_chars > 0);
   handle_data();
   low_power();
+#ifdef CONFIG_BEACON_GPS_BN_220
+  ESP_LOGD(TAG, "$GNRMC");
+  gps.encode('$');
+  gps.encode('G');
+  gps.encode('N');
+  gps.encode('R');
+  gps.encode('M');
+  gps.encode('C');
+#endif
 }
 
 extern "C" void app_main(void) {
