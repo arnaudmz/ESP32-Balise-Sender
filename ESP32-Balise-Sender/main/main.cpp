@@ -247,7 +247,7 @@ void loop() {
   uint8_t c;
   int nb_chars;
   do {
-    nb_chars = uart_read_bytes(UART_NUM_1, &c, 1, 100 / portTICK_RATE_MS);
+    nb_chars = uart_read_bytes(UART_NUM_1, &c, 1, 5 / portTICK_RATE_MS);
     if(nb_chars > 0) {
       ESP_LOGD(TAG, "%c", c);
       gps.encode(c);
