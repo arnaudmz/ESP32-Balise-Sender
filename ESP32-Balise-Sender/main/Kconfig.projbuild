@@ -12,6 +12,10 @@ menu "BEACON CONFIGURATION"
             in the components/partition_table directory. Otherwise it's
             possible to create a new custom partition CSV for your application.
 
+        config BEACON_GPS_MOCK
+            bool "Mock (not a read device)"
+            help
+                Useful to send beacons every 3 seconds, even if no device
         config BEACON_GPS_BN_220
             bool "BN-220 (preconfigured in 115200)"
             help

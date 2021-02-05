@@ -18,7 +18,6 @@ static const char* TAG = "Beacon";
 //#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "droneID_FR.h"
-//#define MOCK_GPS
 
 #define WIFI_CHANNEL CONFIG_WIFI_CHANNEL
 
@@ -79,6 +78,11 @@ char ssid[32];
 char mac_str[13];
 char drone_id[33];
 
+#ifdef CONFIG_BEACON_GPS_MOCK
+char mock_msg[] = "$GPRMC,015606.000,A,3150.7584,N,11712.0491,E,12.30,231.36,280715,,,A*57\r\n$GPGGA,015606.000,3150.7584,N,11712.0491,E,1,7,1.28,265.0,M,0.0,M,,*64\r\n";
+uint8_t mock_cursor = 0;
+#endif
+
 esp_err_t event_handler(void *ctx, system_event_t *event) {
   return ESP_OK;
 }
@@ -114,7 +118,18 @@ uint8_t st[512];
 uint8_t st_i;
 bool wait_for_char(int timeout_ms, bool inject) {
   uint8_t c;
-  int nb_chars = uart_read_bytes(UART_NUM_1, &c, 1, timeout_ms / portTICK_RATE_MS);
+  int nb_chars;
+#ifdef CONFIG_BEACON_GPS_MOCK
+  if (mock_cursor == strlen(mock_msg)) {
+    nb_chars = 0;
+    mock_cursor = 0;
+  } else {
+    nb_chars = 1;
+    c = mock_msg[mock_cursor++];
+  }
+#else
+  nb_chars = uart_read_bytes(UART_NUM_1, &c, 1, timeout_ms / portTICK_RATE_MS);
+#endif
   if(nb_chars > 0) {
     if(inject) {
       gps.encode(c);
@@ -239,7 +254,7 @@ void low_power(uint32_t delay_ms) {
   esp_light_sleep_start();
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
 #endif
-#ifdef CONFIG_BEACON_GPS_BN_220
+#if defined(CONFIG_BEACON_GPS_BN_220) || defined(CONFIG_BEACON_GPS_MOCK)
   esp_sleep_enable_gpio_wakeup();
   esp_sleep_enable_timer_wakeup(delay_ms * uS_TO_mS_FACTOR);
   esp_light_sleep_start();
@@ -248,10 +263,12 @@ void low_power(uint32_t delay_ms) {
 }
 
 void uart_setup() {
+#if defined(CONFIG_BEACON_GPS_L96) || defined(CONFIG_BEACON_GPS_L80R)
   const char pmtk_select_nmea_msg[] = "PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
   //const char pmtk_switch_baud_rate[] = "PMTK251,115200";
   //const char pmtk_enable_pps[] = "PMTK255,1";
-  const char pmtk_config_pps[] = "PMTK285,4,132";
+  const char pmtk_config_pps[] = "PMTK285,4,125";
+#endif
   const uart_config_t uart_config = {
     .baud_rate = 115200,
     .data_bits = UART_DATA_8_BITS,
@@ -317,26 +334,29 @@ void setup() {
 void loop() {
   uint32_t startup_ts = millis();
   uint32_t first_char_ts = 0;
-#ifdef CONFIG_BEACON_GPS_BN_220
+  uint32_t last_char_ts = 0;
+#if defined(CONFIG_BEACON_GPS_BN_220) || defined(CONFIG_BEACON_GPS_MOCK)
   uint32_t sleep_duration = 990;
 #endif
   ESP_LOGV(TAG, "%d Wakeup", startup_ts);
   st_i=0;
   if (wait_for_char(1000, true)) {
     first_char_ts = millis();
-    ESP_LOGD(TAG, "%d First Char, wasted %dms", first_char_ts, first_char_ts - startup_ts);
+    ESP_LOGV(TAG, "%d First Char, wasted %dms", first_char_ts, first_char_ts - startup_ts);
     while (wait_for_char(20, true)) {
     }
     ESP_LOGV(TAG, "%ld Last Char", millis());
+    last_char_ts = millis();
+    ESP_LOGD(TAG, "%d lost %dms then read %d chars in %d ms", last_char_ts, first_char_ts - startup_ts, st_i, last_char_ts - first_char_ts);
   }
   handle_data();
   if (first_char_ts > 0) {
     ESP_LOG_BUFFER_HEXDUMP(TAG, st, st_i, ESP_LOG_VERBOSE);
-#ifdef CONFIG_BEACON_GPS_BN_220
+#if defined(CONFIG_BEACON_GPS_BN_220) || defined(CONFIG_BEACON_GPS_MOCK)
     sleep_duration -= millis() - first_char_ts;
 #endif
   }
-#ifdef CONFIG_BEACON_GPS_BN_220
+#if defined(CONFIG_BEACON_GPS_BN_220) || defined(CONFIG_BEACON_GPS_MOCK)
   ESP_LOGV(TAG, "%ld Going to sleep for %dms", millis(), sleep_duration);
   low_power(sleep_duration);
 #else
