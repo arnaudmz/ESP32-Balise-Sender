@@ -33,6 +33,11 @@ static const char* TAG = "Beacon";
 #define MASS_LSB_IO  (gpio_num_t)CONFIG_BEACON_MASS_LSB_IO
 #define LED_IO       (gpio_num_t)CONFIG_BEACON_LED_IO
 
+static_assert(strlen(CONFIG_BEACON_BUILDER_ID) == 3, "BEACON_VENDOR_ID string shoud be 3 char long!");
+static_assert(CONFIG_BEACON_BUILDER_ID[3] == 0, "BEACON_VENDOR_ID string shoud be null-terminated!");
+static_assert(strlen(CONFIG_BEACON_VERSION) == 3, "BEACON_VERSION string shoud be 3 char long!");
+static_assert(CONFIG_BEACON_VERSION[3] == 0, "BEACON_VERSIOB string shoud be null-terminated!");
+
 #define GPS_BAUD_RATE 115200
 #define uS_TO_mS_FACTOR 1000
 #define RX_BUF_SIZE 256
@@ -109,8 +114,8 @@ void compute_ID() {
   gpio_pulldown_dis(GROUP_LSB_IO);
   gpio_pulldown_dis(MASS_MSB_IO);
   gpio_pulldown_dis(MASS_LSB_IO);
-  snprintf(drone_id, 33, "AEM00100000000%1d%03d%12s",
-      model_group, model_mass_group, mac_str);
+  snprintf(drone_id, 33, "%3s%3s00000000%1d%03d%12s",
+      CONFIG_BEACON_BUILDER_ID, CONFIG_BEACON_VERSION, model_group, model_mass_group, mac_str);
   ESP_LOGD(TAG, "Computed ID: %s", drone_id);
 }
 
@@ -186,30 +191,32 @@ void compute_and_send_beacon_if_needed() {
 
 void handle_data() {
   static uint64_t gpsMap = 0;
-#ifdef MOCK_GPS
-  if (false) {
-#else
   if (!gps.location.isValid()) {
-#endif
     if (millis() - gpsMap > 1000) {
-
+      gpsMap = millis();
       ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %lf", gpsSec++, gps.satellites.value(), gps.hdop.hdop());
       gpio_set_level(LED_IO, 0);
-      gpsMap = millis();
       vTaskDelay(10 / portTICK_PERIOD_MS);
       gpio_set_level(LED_IO, 1);
     }
   } else {
-#ifdef MOCK_GPS
     if (!has_set_home) {
-#else
-    if (!has_set_home && gps.satellites.value() > 6 && gps.hdop.hdop() < 2.0) {
-#endif
-      has_set_home = true;
-      home_alt = gps.altitude.meters();
-      ESP_LOGI(TAG, "Setting Home Position, Altitude=%d", (int)home_alt);
-      drone_idfr.set_home_position(gps.location.lat(), gps.location.lng(), gps.altitude.meters());
-      gpio_set_level(LED_IO, 0);
+      if (gps.satellites.value() > 6 && gps.hdop.hdop() < 2.0) {
+        has_set_home = true;
+        home_alt = gps.altitude.meters();
+        ESP_LOGI(TAG, "Setting Home Position, Altitude=%d", (int)home_alt);
+        drone_idfr.set_home_position(gps.location.lat(), gps.location.lng(), gps.altitude.meters());
+        gpio_set_level(LED_IO, 0);
+      } else {
+        // Looking for better precision to set home, blink twice
+        gpio_set_level(LED_IO, 0);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+        gpio_set_level(LED_IO, 1);
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+        gpio_set_level(LED_IO, 0);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+        gpio_set_level(LED_IO, 1);
+      }
     }
     drone_idfr.set_current_position(gps.location.lat(), gps.location.lng(), gps.altitude.meters());
     drone_idfr.set_heading(gps.course.deg());
@@ -247,10 +254,7 @@ void low_power(uint32_t delay_ms) {
   esp_sleep_enable_gpio_wakeup();
   esp_light_sleep_start();
   ESP_LOGV(TAG, "%ld Wk0", millis());
-  //esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
   gpio_wakeup_enable(PPS_IO, GPIO_INTR_LOW_LEVEL);
-  //esp_sleep_enable_gpio_wakeup();
-  //esp_sleep_enable_timer_wakeup(800 * uS_TO_mS_FACTOR);
   esp_light_sleep_start();
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
 #endif
@@ -297,7 +301,7 @@ void setup() {
   uint8_t mac[6];
   ESP_ERROR_CHECK( esp_read_mac(mac, ESP_MAC_WIFI_STA) );
   snprintf(mac_str, 13, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  snprintf(ssid, 32, "AEM_%s", mac_str);
+  snprintf(ssid, 32, "%3s_%s", CONFIG_BEACON_BUILDER_ID, mac_str);
   ESP_LOGI(TAG, "SSID: %s", ssid);
   const size_t ssid_size = (sizeof(ssid) / sizeof(*ssid)) - 1; // remove trailling null termination
   beaconPacket[40] = ssid_size;  // set size
