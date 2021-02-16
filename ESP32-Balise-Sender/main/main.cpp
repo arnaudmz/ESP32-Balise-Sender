@@ -41,9 +41,6 @@ static_assert(CONFIG_BEACON_VERSION[3] == 0, "BEACON_VERSIOB string shoud be nul
 #define GPS_BAUD_RATE 115200
 #define uS_TO_mS_FACTOR 1000
 #define RX_BUF_SIZE 256
-//#define PACKET_READ_TICS        (30 / portTICK_RATE_MS)
-
-#define CHARPP(c) (c <= '\r'? 'X': c)
 
 static constexpr uint8_t model_id_to_value[] = {1, 2, 3, 4};
 static constexpr uint8_t mass_id_to_value[] = {2, 4, 25, 150};
@@ -84,7 +81,8 @@ char mac_str[13];
 char drone_id[33];
 
 #ifdef CONFIG_BEACON_GPS_MOCK
-char mock_msg[] = "$GPRMC,015606.000,A,3150.7584,N,11712.0491,E,12.30,231.36,280715,,,A*57\r\n$GPGGA,015606.000,3150.7584,N,11712.0491,E,1,7,1.28,265.0,M,0.0,M,,*64\r\n";
+char mock_msg[] = "$GPRMC,015606.000,A,3150.7584,N,11712.0491,E,12.30,231.36,280715,,,A*57\r\n"
+                  "$GPGGA,015606.000,3150.7584,N,11712.0491,E,1,7,1.28,265.0,M,0.0,M,,*64\r\n";
 uint8_t mock_cursor = 0;
 #endif
 
@@ -269,9 +267,11 @@ void low_power(uint32_t delay_ms) {
 void uart_setup() {
 #if defined(CONFIG_BEACON_GPS_L96) || defined(CONFIG_BEACON_GPS_L80R)
   const char pmtk_select_nmea_msg[] = "PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
-  //const char pmtk_switch_baud_rate[] = "PMTK251,115200";
-  //const char pmtk_enable_pps[] = "PMTK255,1";
   const char pmtk_config_pps[] = "PMTK285,4,125";
+#ifdef CONFIG_BEACON_GPS_L80R
+  const char pmtk_switch_baud_rate[] = "PMTK251,115200";
+  const char pmtk_enable_pps[] = "PMTK255,1";
+#endif //ifdef CONFIG_BEACON_GPS_L80R
 #endif
   const uart_config_t uart_config = {
     .baud_rate = 115200,
@@ -284,6 +284,9 @@ void uart_setup() {
   };
   // We won't use a buffer for sending data.
   ESP_ERROR_CHECK( uart_driver_install(UART_NUM_1, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
+#ifdef CONFIG_BEACON_GPS_L80R
+  uart_config.bad_rate = 9600;
+#endif
   ESP_ERROR_CHECK( uart_param_config(UART_NUM_1, &uart_config) );
 #ifdef CONFIG_BEACON_GPS_BN_220
   ESP_ERROR_CHECK( uart_set_pin(UART_NUM_1, UART_PIN_NO_CHANGE, 16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
@@ -291,7 +294,14 @@ void uart_setup() {
 #ifdef CONFIG_BEACON_GPS_L96
   ESP_ERROR_CHECK( uart_set_pin(UART_NUM_1, GPS_TX_IO, GPS_RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
   send_PMTK(pmtk_select_nmea_msg);
-  //send_PMTK(pmtk_enable_pps);
+  send_PMTK(pmtk_config_pps);
+  wait_for_silence();
+#endif
+#ifdef CONFIG_BEACON_GPS_L80R
+  ESP_ERROR_CHECK( uart_set_pin(UART_NUM_1, GPS_TX_IO, GPS_RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+  send_PMTK(pmtk_select_nmea_msg);
+  ESP_ERROR_CHECK( uart_set_baudrate(UART_NUM_1, 115200) );
+  send_PMTK(pmtk_enable_pps);
   send_PMTK(pmtk_config_pps);
   wait_for_silence();
 #endif
