@@ -38,12 +38,16 @@ menu "Beacon Configuration"
                 Quectel L80-R GPS
 
                 Will be auto-configured at boot time
-        config BEACON_GPS_L96
-            bool "L96 (preconfigured in 115200)"
+        config BEACON_GPS_L96_UART
+            bool "L96 (UART, preconfigured in 115200)"
             help
-                Quectel L96 GPS
+                Quectel L96 GPS using PPS + UART
 
                 Must be preconfigured in 115200 bauds with PPS enabled (140ms long peaks)
+        config BEACON_GPS_L96_I2C
+            bool "L96 (I2C)"
+            help
+                Quectel L96 GPS using I2C port
     endchoice
 
     config BEACON_LED_IO
@@ -60,24 +64,38 @@ menu "Beacon Configuration"
         help
             Use 6 by default
 
+    config BEACON_GPS_SDA_IO
+        int "GPS SDA GPIO number" if BEACON_GPS_L96_I2C
+        range 0 34
+        default 16
+        help
+            GPIO number (IOxx) to use for I2C Data
+
+    config BEACON_GPS_SCL_IO
+        int "GPS SCL GPIO number" if BEACON_GPS_L96_I2C
+        range 0 34
+        default 17
+        help
+            GPIO number (IOxx) to use for I2C Clock
+
     config BEACON_GPS_RX_IO
-        int "GPS RX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96 || BEACON_GPS_BN_220
+        int "GPS RX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART || BEACON_GPS_BN_220
         range 0 34
         default 16
         help
             GPIO number (IOxx) to use to recieve GPS data
 
     config BEACON_GPS_TX_IO
-        int "GPS TX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96
+        int "GPS TX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
         range 0 34
         default 17
         help
             GPIO number (IOxx) to use to send data to GPS
     
     config BEACON_GPS_PPS_IO
-        int "GPS PPS GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96
+        int "GPS PPS GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
         range 0 34
-        default 5
+        default 4
         help
             GPIO number (IOxx) to use to recieve PPS signal from GPS
 

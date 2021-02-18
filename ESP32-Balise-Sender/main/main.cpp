@@ -21,10 +21,15 @@ static const char* TAG = "Beacon";
 
 #define WIFI_CHANNEL CONFIG_WIFI_CHANNEL
 
-#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96)
+#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
 #define GPS_RX_IO    (gpio_num_t)CONFIG_BEACON_GPS_RX_IO
 #define GPS_TX_IO    (gpio_num_t)CONFIG_BEACON_GPS_TX_IO
 #define PPS_IO       (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO
+#endif
+
+#ifdef CONFIG_BEACON_GPS_L96_I2C
+#define GPS_SDA_IO    (gpio_num_t)CONFIG_BEACON_GPS_SDA_IO
+#define GPS_SCL_IO    (gpio_num_t)CONFIG_BEACON_GPS_SCL_IO
 #endif
 
 #define GROUP_MSB_IO (gpio_num_t)CONFIG_BEACON_GROUP_MSB_IO
@@ -247,7 +252,7 @@ void low_power(uint32_t delay_ms) {
   esp_light_sleep_start();
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
 #endif
-#ifdef CONFIG_BEACON_GPS_L96
+#ifdef CONFIG_BEACON_GPS_L96_UART
   gpio_wakeup_enable(PPS_IO, GPIO_INTR_HIGH_LEVEL);
   esp_sleep_enable_gpio_wakeup();
   esp_light_sleep_start();
@@ -265,7 +270,7 @@ void low_power(uint32_t delay_ms) {
 }
 
 void uart_setup() {
-#if defined(CONFIG_BEACON_GPS_L96) || defined(CONFIG_BEACON_GPS_L80R)
+#if defined(CONFIG_BEACON_GPS_L96_UART) || defined(CONFIG_BEACON_GPS_L80R)
   const char pmtk_select_nmea_msg[] = "PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
   const char pmtk_config_pps[] = "PMTK285,4,125";
 #ifdef CONFIG_BEACON_GPS_L80R
@@ -291,7 +296,7 @@ void uart_setup() {
 #ifdef CONFIG_BEACON_GPS_BN_220
   ESP_ERROR_CHECK( uart_set_pin(UART_NUM_1, UART_PIN_NO_CHANGE, 16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
 #endif
-#ifdef CONFIG_BEACON_GPS_L96
+#ifdef CONFIG_BEACON_GPS_L96_UART
   ESP_ERROR_CHECK( uart_set_pin(UART_NUM_1, GPS_TX_IO, GPS_RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
   send_PMTK(pmtk_select_nmea_msg);
   send_PMTK(pmtk_config_pps);
@@ -304,6 +309,33 @@ void uart_setup() {
   send_PMTK(pmtk_enable_pps);
   send_PMTK(pmtk_config_pps);
   wait_for_silence();
+#endif
+}
+
+#ifdef CONFIG_BEACON_GPS_L96_I2C
+void i2c_setup() {
+  static i2c_port_t i2c_port  = I2C_NUM_0;
+  static uint32_t i2c_frequency = 400000;
+  i2c_config_t conf = {
+    .mode = I2C_MODE_MASTER,
+    .sda_io_num = GPS_SDA_IO,
+    .sda_pullup_en = GPIO_PULLUP_ENABLE,
+    .scl_io_num = GPS_SCL_IO,
+    .scl_pullup_en = GPIO_PULLUP_ENABLE,
+    .master.clk_speed = i2c_frequency
+  };
+  i2c_driver_install(i2c_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+  ESP_ERROR_CHECK( i2c_param_config(i2c_port, &conf) );
+}
+#endif
+
+void gps_setup() {
+#if defined(CONFIG_BEACON_GPS_MOCK) || defined(CONFIG_BEACON_GPS_L96_I2C)
+#ifdef CONFIG_BEACON_GPS_L96_I2C
+  i2c_setup();
+#endif // ifdef CONFIG_BEACON_GPS_L96_I2C
+#else
+  uart_setup();
 #endif
 }
 
@@ -324,7 +356,7 @@ void setup() {
   gpio_pad_select_gpio(GROUP_LSB_IO);
   gpio_pad_select_gpio(MASS_MSB_IO);
   gpio_pad_select_gpio(MASS_LSB_IO);
-#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96)
+#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
   gpio_pad_select_gpio(PPS_IO);
 #endif
   gpio_set_direction(LED_IO, GPIO_MODE_OUTPUT);
@@ -332,7 +364,7 @@ void setup() {
   gpio_set_direction(GROUP_LSB_IO, GPIO_MODE_INPUT);
   gpio_set_direction(MASS_MSB_IO, GPIO_MODE_INPUT);
   gpio_set_direction(MASS_LSB_IO, GPIO_MODE_INPUT);
-#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96)
+#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
   gpio_set_direction(PPS_IO, GPIO_MODE_INPUT);
 #endif
   nvs_flash_init();
@@ -342,7 +374,7 @@ void setup() {
   ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
   ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
-  uart_setup();
+  gps_setup();
 }
 
 void loop() {
