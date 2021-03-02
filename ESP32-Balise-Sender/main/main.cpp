@@ -10,12 +10,13 @@
 
 #include "nvs_flash.h"
 #include "string.h"
+#include <cmath>
 
 static const char* TAG = "Beacon";
 #include "TinyGPS++.h"
 //#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-//#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "droneID_FR.h"
 
@@ -87,8 +88,14 @@ char mac_str[13];
 char drone_id[33];
 
 #ifdef CONFIG_BEACON_GPS_MOCK
-char mock_msg[] = "$GPRMC,015606.000,A,3150.7584,N,11712.0491,E,12.30,231.36,280715,,,A*57\r\n"
-                  "$GPGGA,015606.000,3150.7584,N,11712.0491,E,1,7,1.28,265.0,M,0.0,M,,*64\r\n";
+char mock_msg[256];
+double mock_gps_home_lat = 4843.20138;
+double mock_gps_home_long = 211.47344;
+double mock_gps_home_ts = 145203;
+double mock_gps_raduis = 0.30;
+int mock_gps_home_alt = 334;
+int mock_gps_max_height = 150;
+int mock_gps_min_height = 10;
 uint8_t mock_cursor = 0;
 #endif
 
@@ -128,6 +135,63 @@ void compute_ID() {
   ESP_LOGD(TAG, "Computed ID: %s", drone_id);
 }
 
+uint8_t compute_PMTK_cksum(const char *st) {
+  uint8_t cksum = 0;
+  for(int i=0; i < strlen(st); i++) {
+    cksum ^= st[i];
+  }
+  return cksum;
+}
+
+#ifdef CONFIG_BEACON_GPS_MOCK
+void compute_mock_msg() {
+  double lat;
+  double longi;
+  double heading;
+  double speed_in_knots;
+  int alt;
+  char raw_gprmc_msg[120], raw_gpgga_msg[120];
+  int gprmc_cksum, gpgga_cksum;
+  if (!has_set_home) {
+    lat = mock_gps_home_lat;
+    longi = mock_gps_home_long;
+    heading = 0;
+    speed_in_knots = 0.0;
+    alt = mock_gps_home_alt;
+  } else {
+    int secs_from_start = millis() / 1000;
+    double pos_angle = (double)secs_from_start * M_TWOPI / 66.33;
+    double alt_angle = (double)secs_from_start * M_TWOPI / 92.35;
+    ESP_LOGV(TAG, "Computed pos_angle: %f", pos_angle);
+    ESP_LOGV(TAG, "Computed alt_angle: %f", alt_angle);
+    lat = mock_gps_home_lat + mock_gps_raduis * sin(pos_angle);
+    longi = mock_gps_home_long + mock_gps_raduis * cos(pos_angle);
+    heading = fmod(360 - fmod(pos_angle * 360.0 / M_TWOPI, 360), 360);
+    speed_in_knots = 20.0 + 10.0 * sin(pos_angle);
+    alt = mock_gps_home_alt + (mock_gps_max_height + mock_gps_min_height) / 2 + (mock_gps_max_height -  mock_gps_min_height) / 2 * cos(alt_angle);
+  }
+  ESP_LOGV(TAG, "Computed heading: %f", heading);
+  ESP_LOGV(TAG, "Computed speed: %f", speed_in_knots);
+  ESP_LOGV(TAG, "Computed alt: %d", alt);
+  ESP_LOGV(TAG, "Computed lat: %f", lat);
+  ESP_LOGV(TAG, "Computed longi: %f", longi);
+  snprintf(raw_gprmc_msg, 128, "GPRMC,015606.000,A,%.4f,N,%4f,E,%.2f,%.2f,280715,,,A",
+      lat,
+      longi,
+      speed_in_knots,
+      heading);
+  gprmc_cksum = compute_PMTK_cksum(raw_gprmc_msg);
+  snprintf(raw_gpgga_msg, 128, "GPGGA,015606.000,%.4f,N,%.4f,E,1,7,1.28,%d.0,M,0.0,M,,",
+      lat,
+      longi,
+      alt);
+  gpgga_cksum = compute_PMTK_cksum(raw_gpgga_msg);
+  snprintf(mock_msg, 256, "$%s*%2X\r\n$%s*%2X\r\n", raw_gprmc_msg, gprmc_cksum, raw_gpgga_msg, gpgga_cksum);
+  ESP_LOGV(TAG, "msg: %s", mock_msg);
+}
+#endif
+
+
 uint8_t st[512];
 uint8_t st_i;
 bool wait_for_char(int timeout_ms, bool inject) {
@@ -137,6 +201,7 @@ bool wait_for_char(int timeout_ms, bool inject) {
   if (mock_cursor == strlen(mock_msg)) {
     nb_chars = 0;
     mock_cursor = 0;
+    compute_mock_msg();
   } else {
     nb_chars = 1;
     c = mock_msg[mock_cursor++];
@@ -162,10 +227,7 @@ void wait_for_silence() {
 void send_PMTK(const char *st) {
   const char prolog='$';
   char crc_buf[6];
-  uint8_t cksum = 0;
-  for(int i=0; i < strlen(st); i++) {
-    cksum ^= st[i];
-  }
+  uint8_t cksum = compute_PMTK_cksum(st);
   snprintf(crc_buf, 6, "*%02X\r\n", cksum);
   wait_for_silence();
   uart_write_bytes(UART_NUM_1, &prolog, 1);
@@ -363,15 +425,15 @@ void setup() {
   gpio_pad_select_gpio(GROUP_LSB_IO);
   gpio_pad_select_gpio(MASS_MSB_IO);
   gpio_pad_select_gpio(MASS_LSB_IO);
-#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
-  gpio_pad_select_gpio(PPS_IO);
-#endif
-  gpio_set_direction(LED_IO, GPIO_MODE_OUTPUT);
   gpio_set_direction(GROUP_MSB_IO, GPIO_MODE_INPUT);
   gpio_set_direction(GROUP_LSB_IO, GPIO_MODE_INPUT);
   gpio_set_direction(MASS_MSB_IO, GPIO_MODE_INPUT);
   gpio_set_direction(MASS_LSB_IO, GPIO_MODE_INPUT);
 #endif
+#if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
+  gpio_pad_select_gpio(PPS_IO);
+#endif
+  gpio_set_direction(LED_IO, GPIO_MODE_OUTPUT);
 #if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
   gpio_set_direction(PPS_IO, GPIO_MODE_INPUT);
 #endif
@@ -393,7 +455,7 @@ void loop() {
   uint32_t sleep_duration = 990;
 #endif
   ESP_LOGV(TAG, "%d Wakeup", startup_ts);
-  st_i=0;
+  st_i = 0;
   if (wait_for_char(1000, true)) {
     first_char_ts = millis();
     ESP_LOGV(TAG, "%d First Char, wasted %dms", first_char_ts, first_char_ts - startup_ts);
