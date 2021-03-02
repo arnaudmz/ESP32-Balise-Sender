@@ -32,10 +32,13 @@ static const char* TAG = "Beacon";
 #define GPS_SCL_IO    (gpio_num_t)CONFIG_BEACON_GPS_SCL_IO
 #endif
 
+#ifdef CONFIG_BEACON_ID_SWITCH
 #define GROUP_MSB_IO (gpio_num_t)CONFIG_BEACON_GROUP_MSB_IO
 #define GROUP_LSB_IO (gpio_num_t)CONFIG_BEACON_GROUP_LSB_IO
 #define MASS_MSB_IO  (gpio_num_t)CONFIG_BEACON_MASS_MSB_IO
 #define MASS_LSB_IO  (gpio_num_t)CONFIG_BEACON_MASS_LSB_IO
+#endif
+
 #define LED_IO       (gpio_num_t)CONFIG_BEACON_LED_IO
 
 static_assert(strlen(CONFIG_BEACON_BUILDER_ID) == 3, "BEACON_VENDOR_ID string shoud be 3 char long!");
@@ -74,8 +77,6 @@ uint64_t gpsSec = 0;
 
 uint64_t beaconSec = 0;
 bool stat_led = false;
-uint8_t model_group;
-uint8_t model_mass_group;
 uint8_t header_size;
 
 TinyGPSPlus gps;
@@ -107,16 +108,21 @@ unsigned long IRAM_ATTR millis() {
 }
 
 void compute_ID() {
+#ifdef CONFIG_BEACON_ID_SWITCH
   gpio_pulldown_en(GROUP_MSB_IO);
   gpio_pulldown_en(GROUP_LSB_IO);
   gpio_pulldown_en(MASS_MSB_IO);
   gpio_pulldown_en(MASS_LSB_IO);
-  model_group =      model_id_to_value[(gpio_get_level(GROUP_MSB_IO) << 1) + gpio_get_level(GROUP_LSB_IO)];
-  model_mass_group = mass_id_to_value[(gpio_get_level(MASS_MSB_IO) << 1) + gpio_get_level(MASS_LSB_IO)];
+  uint8_t model_group =      model_id_to_value[(gpio_get_level(GROUP_MSB_IO) << 1) + gpio_get_level(GROUP_LSB_IO)];
+  uint8_t model_mass_group = mass_id_to_value[(gpio_get_level(MASS_MSB_IO) << 1) + gpio_get_level(MASS_LSB_IO)];
   gpio_pulldown_dis(GROUP_MSB_IO);
   gpio_pulldown_dis(GROUP_LSB_IO);
   gpio_pulldown_dis(MASS_MSB_IO);
   gpio_pulldown_dis(MASS_LSB_IO);
+#else
+  uint8_t model_group = 0;
+  uint8_t model_mass_group = 0;
+#endif
   snprintf(drone_id, 33, "%3s%3s00000000%1d%03d%12s",
       CONFIG_BEACON_BUILDER_ID, CONFIG_BEACON_VERSION, model_group, model_mass_group, mac_str);
   ESP_LOGD(TAG, "Computed ID: %s", drone_id);
@@ -352,6 +358,7 @@ void setup() {
   memcpy(&beaconPacket[16], mac, 6); // set mac as filter
   header_size = 41 + ssid_size;
   gpio_pad_select_gpio(LED_IO);
+#ifdef CONFIG_BEACON_ID_SWITCH
   gpio_pad_select_gpio(GROUP_MSB_IO);
   gpio_pad_select_gpio(GROUP_LSB_IO);
   gpio_pad_select_gpio(MASS_MSB_IO);
@@ -364,6 +371,7 @@ void setup() {
   gpio_set_direction(GROUP_LSB_IO, GPIO_MODE_INPUT);
   gpio_set_direction(MASS_MSB_IO, GPIO_MODE_INPUT);
   gpio_set_direction(MASS_LSB_IO, GPIO_MODE_INPUT);
+#endif
 #if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
   gpio_set_direction(PPS_IO, GPIO_MODE_INPUT);
 #endif

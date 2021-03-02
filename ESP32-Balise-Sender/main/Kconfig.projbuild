@@ -99,31 +99,37 @@ menu "Beacon Configuration"
         help
             GPIO number (IOxx) to use to recieve PPS signal from GPS
 
+    config BEACON_ID_SWITCH
+        bool "Enable Switches to set ID"
+        default false
+        help
+            Will allow you to choose 4 switches used to set ID dynamically
+
     config BEACON_GROUP_MSB_IO
-        int "Model Group MSB GPIO number"
+        int "Model Group MSB GPIO number" if BEACON_ID_SWITCH
         range 0 34
         default 26
         help
             GPIO number (IOxx) to use
 
     config BEACON_GROUP_LSB_IO
-        int "Model Group LSB GPIO number"
+        int "Model Group LSB GPIO number" if BEACON_ID_SWITCH
         range 0 34
         default 27
         help
             GPIO number (IOxx) to use
 
     config BEACON_MASS_MSB_IO
-        int "Model Weigh Class MSB GPIO number"
+        int "Model Weigh Class MSB GPIO number" if BEACON_ID_SWITCH
         range 0 34
         default 14
         help
             GPIO number (IOxx) to use
 
     config BEACON_MASS_LSB_IO
-        int "Model Weigh Class LSB GPIO number"
+        int "Model Weigh Class LSB GPIO number" if BEACON_ID_SWITCH
         range 0 34
-        default 12
+        default 25
         help
             GPIO number (IOxx) to use
 
