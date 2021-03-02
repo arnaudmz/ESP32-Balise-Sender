@@ -1,13 +1,13 @@
 menu "Beacon Configuration"
     config BEACON_BUILDER_ID
         string "Device Builder ID (3 chars)"
-        default "AMZ"
+        default "000"
         help
           Should be a registered 3 char [A-Z][0-9] string only!!
     
     config BEACON_VERSION
         string "Device Version (3 chars)"
-        default "001"
+        default "AM1"
         help
           Should be a 3 char [0-9] string only!!
 
@@ -79,7 +79,7 @@ menu "Beacon Configuration"
             GPIO number (IOxx) to use for I2C Clock
 
     config BEACON_GPS_RX_IO
-        int "GPS RX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART || BEACON_GPS_BN_220
+        int "GPS RX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
         range 0 34
         default 16
         help
