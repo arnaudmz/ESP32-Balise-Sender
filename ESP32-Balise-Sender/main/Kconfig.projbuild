@@ -1,54 +1,65 @@
+# vim:et:sts=4:sw=4:si
 menu "Beacon Configuration"
-    config BEACON_BUILDER_ID
-        string "Device Builder ID (3 chars)"
-        default "000"
-        help
-          Should be a registered 3 char [A-Z][0-9] string only!!
+    menu "Beacon ID"
+        config BEACON_ID_BUILDER
+            string "Device Builder ID (3 chars)"
+            default "000"
+            help
+              Should be a registered 3 char [A-Z][0-9] string only!!
+        
+        config BEACON_ID_VERSION
+            string "Device Version (3 chars)"
+            default "AM1"
+            help
+              Should be a 3 char [0-9] string only!!
     
-    config BEACON_VERSION
-        string "Device Version (3 chars)"
-        default "AM1"
-        help
-          Should be a 3 char [0-9] string only!!
-
-    choice BEACON_GPS_MODEL
-        prompt "GPS Model"
-        default BEACON_GPS_BN_220
-        help
-            The partition table to flash to the ESP32. The partition table
-            determines where apps, data and other resources are expected to
-            be found.
-
-            The predefined partition table CSV descriptions can be found
-            in the components/partition_table directory. Otherwise it's
-            possible to create a new custom partition CSV for your application.
-
-        config BEACON_GPS_MOCK
-            bool "Mock (not a real device)"
+        config BEACON_ID_OVERRIDE_MAC
+            bool "Override MAC in ID and SSID"
+            default false
             help
-                Useful to send beacons every 3 seconds, even if no device
-        config BEACON_GPS_BN_220
-            bool "BN-220 (preconfigured in 115200)"
+                Choose a 12 char long specific string
+                It will be used in FR ID and in the Wifi SSID
+        
+        config BEACON_ID_OVERRIDE_VALUE
+            string "Value to use to override MAC in ID and SSID" if BEACON_ID_OVERRIDE_MAC
+            default "0123456789AB"
             help
-                Must be preconfigured in 115200 bauds and to send only GNRMC and GNGGA NMEA
-                messages
-        config BEACON_GPS_L80R
-            bool "L80R"
-            help
-                Quectel L80-R GPS
+                A user-defined 12 char long string
 
-                Will be auto-configured at boot time
-        config BEACON_GPS_L96_UART
-            bool "L96 (UART, preconfigured in 115200)"
+        config BEACON_ID_SWITCH
+            bool "Enable Switches to set ID"
+            default false
             help
-                Quectel L96 GPS using PPS + UART
+                Will allow you to choose 4 switches used to set ID dynamically
 
-                Must be preconfigured in 115200 bauds with PPS enabled (140ms long peaks)
-        config BEACON_GPS_L96_I2C
-            bool "L96 (I2C)"
+        config BEACON_ID_GROUP_MSB_IO
+            int "Model Group MSB GPIO number" if BEACON_ID_SWITCH
+            range 0 34
+            default 26
             help
-                Quectel L96 GPS using I2C port
-    endchoice
+                GPIO number (IOxx) to use
+
+        config BEACON_ID_GROUP_LSB_IO
+            int "Model Group LSB GPIO number" if BEACON_ID_SWITCH
+            range 0 34
+            default 27
+            help
+                GPIO number (IOxx) to use
+
+        config BEACON_ID_MASS_MSB_IO
+            int "Model Weigh Class MSB GPIO number" if BEACON_ID_SWITCH
+            range 0 34
+            default 14
+            help
+                GPIO number (IOxx) to use
+
+        config BEACON_ID_MASS_LSB_IO
+            int "Model Weigh Class LSB GPIO number" if BEACON_ID_SWITCH
+            range 0 34
+            default 25
+            help
+                GPIO number (IOxx) to use
+    endmenu
 
     config BEACON_LED_IO
         int "LED GPIO number"
@@ -64,73 +75,58 @@ menu "Beacon Configuration"
         help
             Use 6 by default
 
-    config BEACON_GPS_SDA_IO
-        int "GPS SDA GPIO number" if BEACON_GPS_L96_I2C
-        range 0 34
-        default 16
-        help
-            GPIO number (IOxx) to use for I2C Data
+    menu "GPS configuration"
+        choice BEACON_GPS_MODEL
+            prompt "GPS Model"
+            default BEACON_GPS_BN_220
+            help
+                The type of GPS module connected to the beacon
 
-    config BEACON_GPS_SCL_IO
-        int "GPS SCL GPIO number" if BEACON_GPS_L96_I2C
-        range 0 34
-        default 17
-        help
-            GPIO number (IOxx) to use for I2C Clock
+            config BEACON_GPS_MOCK
+                bool "Mock (not a real device)"
+                help
+                    Useful to send beacons every 3 seconds, even if no device
+            config BEACON_GPS_BN_220
+                bool "BN-220 (preconfigured in 115200)"
+                help
+                    Must be preconfigured in 115200 bauds and to send only GNRMC and GNGGA NMEA
+                    messages
+            config BEACON_GPS_L80R
+                bool "L80R"
+                help
+                    Quectel L80-R GPS
 
-    config BEACON_GPS_RX_IO
-        int "GPS RX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
-        range 0 34
-        default 16
-        help
-            GPIO number (IOxx) to use to recieve GPS data
+                    Will be auto-configured at boot time
+            config BEACON_GPS_L96_UART
+                bool "L96 (UART, preconfigured in 115200)"
+                help
+                    Quectel L96 GPS using PPS + UART
 
-    config BEACON_GPS_TX_IO
-        int "GPS TX GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
-        range 0 34
-        default 17
-        help
-            GPIO number (IOxx) to use to send data to GPS
-    
-    config BEACON_GPS_PPS_IO
-        int "GPS PPS GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
-        range 0 34
-        default 4
-        help
-            GPIO number (IOxx) to use to recieve PPS signal from GPS
+                    Must be preconfigured in 115200 bauds with PPS enabled (140ms long peaks)
+            config BEACON_GPS_L96_I2C
+                bool "L96 (I2C)"
+                help
+                    Quectel L96 GPS using I2C port
+        endchoice
+        config BEACON_GPS_SDA_IO
+            int "GPS SDA GPIO number" if BEACON_GPS_L96_I2C
+            range 0 34
+            default 16
+            help
+                GPIO number (IOxx) to use for I2C Data
 
-    config BEACON_ID_SWITCH
-        bool "Enable Switches to set ID"
-        default false
-        help
-            Will allow you to choose 4 switches used to set ID dynamically
+        config BEACON_GPS_SCL_IO
+            int "GPS SCL GPIO number" if BEACON_GPS_L96_I2C
+            range 0 34
+            default 17
+            help
+                GPIO number (IOxx) to use for I2C Clock
 
-    config BEACON_GROUP_MSB_IO
-        int "Model Group MSB GPIO number" if BEACON_ID_SWITCH
-        range 0 34
-        default 26
-        help
-            GPIO number (IOxx) to use
-
-    config BEACON_GROUP_LSB_IO
-        int "Model Group LSB GPIO number" if BEACON_ID_SWITCH
-        range 0 34
-        default 27
-        help
-            GPIO number (IOxx) to use
-
-    config BEACON_MASS_MSB_IO
-        int "Model Weigh Class MSB GPIO number" if BEACON_ID_SWITCH
-        range 0 34
-        default 14
-        help
-            GPIO number (IOxx) to use
-
-    config BEACON_MASS_LSB_IO
-        int "Model Weigh Class LSB GPIO number" if BEACON_ID_SWITCH
-        range 0 34
-        default 25
-        help
-            GPIO number (IOxx) to use
-
+        config BEACON_GPS_PPS_IO
+            int "GPS PPS GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
+            range 0 34
+            default 4
+            help
+                GPIO number (IOxx) to use to recieve PPS signal from GPS
+    endmenu
 endmenu
