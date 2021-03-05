@@ -43,6 +43,9 @@ static const char* TAG = "Beacon";
 #define GROUP_LSB_IO (gpio_num_t)CONFIG_BEACON_ID_GROUP_LSB_IO
 #define MASS_MSB_IO  (gpio_num_t)CONFIG_BEACON_ID_MASS_MSB_IO
 #define MASS_LSB_IO  (gpio_num_t)CONFIG_BEACON_ID_MASS_LSB_IO
+#else
+static_assert(strlen(CONFIG_BEACON_ID_PREFIX) == 4, "CONFIG_BEACON_ID_PREFIX string shoud be 4 char long!");
+static_assert(CONFIG_BEACON_ID_PREFIX[4] == 0, "CONFIG_BEACON_ID_PREFIX string shoud be null-terminated!");
 #endif
 
 #define LED_IO       (gpio_num_t)CONFIG_BEACON_LED_IO
@@ -137,12 +140,12 @@ void compute_ID() {
   gpio_pulldown_dis(GROUP_LSB_IO);
   gpio_pulldown_dis(MASS_MSB_IO);
   gpio_pulldown_dis(MASS_LSB_IO);
-#else
-  uint8_t model_group = 0;
-  uint8_t model_mass_group = 0;
-#endif
   snprintf(drone_id, 33, "%3s%3s00000000%1d%03d%12s",
       CONFIG_BEACON_ID_BUILDER, CONFIG_BEACON_ID_VERSION, model_group, model_mass_group, id_suffix);
+#else
+  snprintf(drone_id, 33, "%3s%3s00000000%4s%12s",
+      CONFIG_BEACON_ID_BUILDER, CONFIG_BEACON_ID_VERSION, CONFIG_BEACON_ID_PREFIX, id_suffix);
+#endif
   ESP_LOGD(TAG, "Computed ID: %s", drone_id);
 }
 
@@ -456,6 +459,7 @@ void display_config() {
   ESP_LOGI(TAG, "  - IO for Mass LSB: %d", MASS_LSB_IO);
 #else
   ESP_LOGI(TAG, "Swiches are disabled.");
+  ESP_LOGI(TAG, "Hard coded prefix: %s", CONFIG_BEACON_ID_PREFIX);
 #endif
   ESP_LOGI(TAG, "IO for LED: %d", LED_IO);
 }
