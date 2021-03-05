@@ -15,9 +15,9 @@
 
 static const char* TAG = "Beacon";
 #include "TinyGPS++.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 //#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-//#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "droneID_FR.h"
 #include "mock.h"
