@@ -6,6 +6,7 @@
 #include "esp_event.h"
 #include "esp_wifi.h"
 #include "esp_sleep.h"
+#include "esp_ota_ops.h"
 #include "driver/uart.h"
 
 #include "nvs_flash.h"
@@ -20,7 +21,6 @@ static const char* TAG = "Beacon";
 #include "esp_log.h"
 #include "droneID_FR.h"
 
-#define VERSION "0.1"
 #define WIFI_CHANNEL CONFIG_WIFI_CHANNEL
 
 #if defined(CONFIG_BEACON_GPS_L80R) || defined(CONFIG_BEACON_GPS_L96_UART)
@@ -96,6 +96,7 @@ droneIDFR drone_idfr;
 char ssid[32];
 char id_suffix[13];
 char drone_id[33];
+uint8_t mac[6];
 
 #ifdef CONFIG_BEACON_GPS_MOCK
 char mock_msg[256];
@@ -417,7 +418,9 @@ void gps_setup() {
 }
 
 void display_config() {
-  ESP_LOGI(TAG, "Starting Beacon version %s", VERSION);
+  const esp_app_desc_t *app = esp_ota_get_app_description();
+  ESP_LOGI(TAG, "Starting Beacon (%s) version %s", app->project_name, app->version);
+  ESP_LOGI(TAG, "MAC address: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   ESP_LOGI(TAG, "SSID: %s", ssid);
   ESP_LOGI(TAG, "ID Builder: %s", CONFIG_BEACON_ID_BUILDER);
   ESP_LOGI(TAG, "ID Version: %s", CONFIG_BEACON_ID_VERSION);
@@ -458,7 +461,6 @@ void display_config() {
 }
 
 void setup() {
-  uint8_t mac[6];
   ESP_ERROR_CHECK( esp_read_mac(mac, ESP_MAC_WIFI_STA) );
 #ifdef CONFIG_BEACON_ID_OVERRIDE_MAC
   strncpy(id_suffix, CONFIG_BEACON_ID_OVERRIDE_VALUE, sizeof(id_suffix));
