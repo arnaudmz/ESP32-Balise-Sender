@@ -8,6 +8,7 @@
 #include "esp_sleep.h"
 #include "esp_ota_ops.h"
 #include "driver/uart.h"
+#include "driver/i2c.h"
 
 #include "nvs_flash.h"
 #include "string.h"
@@ -150,6 +151,47 @@ uint8_t st_i;
 
 uint8_t rx_buffer[RX_BUF_SIZE];
 
+#ifdef CONFIG_BEACON_GPS_L96_I2C
+
+#define I2C_MASTER_TX_BUF_DISABLE 0 
+#define I2C_MASTER_RX_BUF_DISABLE 0
+#define I2C_WR_ADDRESS 0x20
+#define I2C_RD_ADDRESS 0x21
+#define I2C_BUF_SIZE 255
+#define ACK_CHECK_EN 0x1
+#define ACK_CHECK_DIS 0x0
+#define ACK_VAL 0x0
+#define NACK_VAL 0x1
+#define I2C_MASTER_TX_BUF_DISABLE 0 
+#define I2C_MASTER_RX_BUF_DISABLE 0
+
+static i2c_port_t i2c_port  = I2C_NUM_0;
+uint8_t i2c_buf[I2C_BUF_SIZE];
+
+void i2c_read() {
+  ESP_ERROR_CHECK( i2c_driver_install(i2c_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0) );
+  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+  i2c_master_start(cmd);
+  i2c_master_write_byte(cmd, I2C_WR_ADDRESS, ACK_CHECK_EN);
+  i2c_master_write_byte(cmd, 0, ACK_CHECK_EN);
+  i2c_master_stop(cmd);
+  esp_err_t ret = i2c_master_cmd_begin(i2c_port, cmd, 1000 / portTICK_RATE_MS);
+  ESP_LOGV(TAG, "Wr ret: 0x%x", ret);
+  i2c_cmd_link_delete(cmd);
+  cmd = i2c_cmd_link_create();
+  i2c_master_start(cmd);
+  i2c_master_write_byte(cmd, I2C_RD_ADDRESS, ACK_CHECK_EN);
+  i2c_master_read(cmd, i2c_buf, I2C_BUF_SIZE - 1, I2C_MASTER_ACK);
+  i2c_master_read_byte(cmd, &i2c_buf[I2C_BUF_SIZE - 1], I2C_MASTER_NACK);
+  i2c_master_stop(cmd);
+  ret = i2c_master_cmd_begin(i2c_port, cmd, 1000 / portTICK_RATE_MS);
+  ESP_LOGV(TAG, "Wr ret: 0x%x", ret);
+  i2c_cmd_link_delete(cmd);
+  ESP_LOG_BUFFER_HEXDUMP(TAG, i2c_buf, I2C_BUF_SIZE, ESP_LOG_VERBOSE);
+  ESP_ERROR_CHECK( i2c_driver_delete(i2c_port) );
+}
+#endif
+
 uint32_t wait_for_chars(int first_timeout_ms = 1000, int next_timeout_ms = 20, bool inject = true) {
   uint32_t first_char_ts, nb_chars;
 #ifdef CONFIG_BEACON_GPS_MOCK
@@ -158,12 +200,18 @@ uint32_t wait_for_chars(int first_timeout_ms = 1000, int next_timeout_ms = 20, b
   memcpy(rx_buffer, mock_msg, nb_chars);
   first_char_ts = millis();
 #else
+#ifdef CONFIG_BEACON_GPS_L96_I2C
+  i2c_read();
+  first_char_ts = millis();
+  nb_chars = 0;
+#else
   nb_chars = uart_read_bytes(UART_NUM_2, rx_buffer, 1, first_timeout_ms / portTICK_RATE_MS);
   if (nb_chars == 0) {
     return 0;
   }
   first_char_ts = millis();
   nb_chars += uart_read_bytes(UART_NUM_2, &rx_buffer[1], RX_BUF_SIZE, next_timeout_ms / portTICK_RATE_MS);
+#endif
 #endif
   if(inject) {
     for(int i = 0; i < nb_chars; i++) {
@@ -333,19 +381,19 @@ void uart_setup() {
 }
 
 #ifdef CONFIG_BEACON_GPS_L96_I2C
+
 void i2c_setup() {
-  static i2c_port_t i2c_port  = I2C_NUM_0;
+  vTaskDelay(500 / portTICK_PERIOD_MS);
   static uint32_t i2c_frequency = 400000;
-  i2c_config_t conf = {
-    .mode = I2C_MODE_MASTER,
-    .sda_io_num = GPS_SDA_IO,
-    .sda_pullup_en = GPIO_PULLUP_ENABLE,
-    .scl_io_num = GPS_SCL_IO,
-    .scl_pullup_en = GPIO_PULLUP_ENABLE,
-    .master.clk_speed = i2c_frequency
-  };
-  i2c_driver_install(i2c_port, I2C_MODE_MASTER, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+  i2c_config_t conf;
+  conf.mode = I2C_MODE_MASTER;
+  conf.sda_io_num = GPS_SDA_IO;
+  conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
+  conf.scl_io_num = GPS_SCL_IO;
+  conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
+  conf.master.clk_speed = i2c_frequency;
   ESP_ERROR_CHECK( i2c_param_config(i2c_port, &conf) );
+  i2c_read();
 }
 #endif
 
