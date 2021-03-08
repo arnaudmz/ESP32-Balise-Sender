@@ -3,9 +3,9 @@
 #include <cstring>
 #include <ctype.h>
 #include <cmath>
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 //#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-//#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 static constexpr char TAG[] = "GPSCnx";
 #include "esp_log.h"
 
