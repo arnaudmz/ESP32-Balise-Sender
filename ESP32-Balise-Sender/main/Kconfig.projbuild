@@ -69,7 +69,7 @@ menu "Beacon Configuration"
     menu "GPS configuration"
         choice BEACON_GPS_MODEL
             prompt "GPS Model"
-            default BEACON_GPS_BN_220
+            default BEACON_GPS_BN_220_UART
             help
                 The type of GPS module connected to the beacon
 
@@ -77,13 +77,13 @@ menu "Beacon Configuration"
                 bool "Mock (not a real device)"
                 help
                     Useful to send beacons every 3 seconds, even if no device
-            config BEACON_GPS_BN_220
-                bool "BN-220 (preconfigured in 115200)"
+            config BEACON_GPS_BN_220_UART
+                bool "BN-220 (UART preconfigured in 115200)"
                 help
                     Must be preconfigured in 115200 bauds and to send only GNRMC and GNGGA NMEA
                     messages
-            config BEACON_GPS_L80R
-                bool "L80R"
+            config BEACON_GPS_L80R_UART
+                bool "L80R (UART, dynamicaly configured)"
                 help
                     Quectel L80-R GPS
 
@@ -114,7 +114,7 @@ menu "Beacon Configuration"
                 GPIO number (IOxx) to use for I2C Clock
 
         config BEACON_GPS_PPS_IO
-            int "GPS PPS GPIO number" if BEACON_GPS_L80R || BEACON_GPS_L96_UART
+            int "GPS PPS GPIO number" if BEACON_GPS_L80R_UART || BEACON_GPS_L96_UART
             range 0 34
             default 4
             help
