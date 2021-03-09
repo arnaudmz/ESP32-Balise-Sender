@@ -121,13 +121,6 @@ menu "Beacon Configuration"
                 GPIO number (IOxx) to use to recieve PPS signal from GPS
     endmenu
 
-    config BEACON_LED_IO
-        int "LED GPIO number"
-        range 0 34
-        default 2
-        help
-            GPIO number (IOxx) to blink on and off.
-
     config BEACON_WIFI_CHANNEL
         int "WIFI Channel for beacon"
         range 1 14

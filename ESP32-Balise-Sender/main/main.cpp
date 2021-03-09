@@ -18,6 +18,7 @@ static const char* TAG = "Main";
 #include "esp_log.h"
 #include "TinyGPS++.h"
 #include "GPSCnx.h"
+#include "LED.h"
 #include "droneID_FR.h"
 
 #define WIFI_CHANNEL CONFIG_WIFI_CHANNEL
@@ -34,8 +35,6 @@ static const char* TAG = "Main";
 static_assert(strlen(CONFIG_BEACON_ID_PREFIX) == 4, "CONFIG_BEACON_ID_PREFIX string shoud be 4 char long!");
 static_assert(CONFIG_BEACON_ID_PREFIX[4] == 0, "CONFIG_BEACON_ID_PREFIX string shoud be null-terminated!");
 #endif
-
-#define LED_IO       (gpio_num_t)CONFIG_BEACON_LED_IO
 
 static_assert(strlen(CONFIG_BEACON_ID_BUILDER) == 3, "BEACON_ID_BUILDER string shoud be 3 char long!");
 static_assert(CONFIG_BEACON_ID_BUILDER[3] == 0, "BEACON_ID_BUILDER string shoud be null-terminated!");
@@ -75,12 +74,12 @@ uint8_t program = 0;
 uint64_t gpsSec = 0;
 
 uint64_t beaconSec = 0;
-bool stat_led = false;
 uint8_t header_size;
 
 TinyGPSPlus gps;
 GPSCnx cnx(&gps);
 droneIDFR drone_idfr;
+LED led;
 
 char ssid[32];
 char id_suffix[13];
@@ -125,13 +124,7 @@ void compute_ID() {
 
 void compute_and_send_beacon_if_needed() {
   if (drone_idfr.has_home_set() && drone_idfr.time_to_send()) {
-    if (stat_led) {
-      gpio_set_level(LED_IO, 1);
-      stat_led = false;
-    } else {
-      gpio_set_level(LED_IO, 0);
-      stat_led = true;
-    }
+    led.toggleFade();
     float time_elapsed = (float(millis() - beaconSec) / 1000.0);
     beaconSec = millis();
 
@@ -156,9 +149,7 @@ void handle_data() {
         gps.time.hour(),
         gps.time.minute(),
         gps.time.second());
-    gpio_set_level(LED_IO, 0);
-    vTaskDelay(10 / portTICK_PERIOD_MS);
-    gpio_set_level(LED_IO, 1);
+    led.blinkOnce();
   } else {
     if (!has_set_home) {
       if (gps.satellites.value() > 6 && gps.hdop.hdop() < 2.0) {
@@ -166,16 +157,9 @@ void handle_data() {
         home_alt = gps.altitude.meters();
         ESP_LOGI(TAG, "Setting Home Position, Altitude=%d", (int)home_alt);
         drone_idfr.set_home_position(gps.location.lat(), gps.location.lng(), gps.altitude.meters());
-        gpio_set_level(LED_IO, 0);
       } else {
         // Looking for better precision to set home, blink twice
-        gpio_set_level(LED_IO, 0);
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        gpio_set_level(LED_IO, 1);
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-        gpio_set_level(LED_IO, 0);
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-        gpio_set_level(LED_IO, 1);
+        led.blinkTwice();
       }
     }
     drone_idfr.set_current_position(gps.location.lat(), gps.location.lng(), gps.altitude.meters());
@@ -205,7 +189,6 @@ void low_power(uint32_t delay_ms = 0) {
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
 #endif
 #if defined(CONFIG_BEACON_GPS_BN_220_UART) || defined(CONFIG_BEACON_GPS_MOCK)
-  esp_sleep_enable_gpio_wakeup();
   esp_sleep_enable_timer_wakeup(delay_ms * uS_TO_mS_FACTOR);
   esp_light_sleep_start();
 #endif
@@ -253,7 +236,6 @@ void print_config() {
   ESP_LOGI(TAG, "Swiches are disabled.");
   ESP_LOGI(TAG, "Hard coded prefix: %s", CONFIG_BEACON_ID_PREFIX);
 #endif
-  ESP_LOGI(TAG, "IO for LED: %d", LED_IO);
 }
 
 void setup() {
@@ -271,8 +253,6 @@ void setup() {
   memcpy(&beaconPacket[16], mac, 6); // set mac as filter
   header_size = 41 + ssid_size;
   print_config();
-  gpio_pad_select_gpio(LED_IO);
-  gpio_set_direction(LED_IO, GPIO_MODE_OUTPUT);
 #ifdef CONFIG_BEACON_ID_SWITCH
   gpio_pad_select_gpio(GROUP_MSB_IO);
   gpio_pad_select_gpio(GROUP_LSB_IO);
@@ -295,6 +275,7 @@ void setup() {
   ESP_ERROR_CHECK( esp_wifi_set_storage(WIFI_STORAGE_RAM) );
   ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
   cnx.begin();
+  led.begin();
 }
 
 void loop() {
