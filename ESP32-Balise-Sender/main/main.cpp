@@ -16,6 +16,7 @@ static const char* TAG = "Main";
 //#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
+#include "Config.h"
 #include "TinyGPS++.h"
 #include "GPSCnx.h"
 #include "LED.h"
@@ -26,25 +27,15 @@ static const char* TAG = "Main";
 #define PPS_IO       (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO
 #endif
 
-#ifdef CONFIG_BEACON_ID_SWITCH
 #define GROUP_MSB_IO (gpio_num_t)CONFIG_BEACON_ID_GROUP_MSB_IO
 #define GROUP_LSB_IO (gpio_num_t)CONFIG_BEACON_ID_GROUP_LSB_IO
 #define MASS_MSB_IO  (gpio_num_t)CONFIG_BEACON_ID_MASS_MSB_IO
 #define MASS_LSB_IO  (gpio_num_t)CONFIG_BEACON_ID_MASS_LSB_IO
-#else
-static_assert(strlen(CONFIG_BEACON_ID_PREFIX) == 4, "CONFIG_BEACON_ID_PREFIX string shoud be 4 char long!");
-static_assert(CONFIG_BEACON_ID_PREFIX[4] == 0, "CONFIG_BEACON_ID_PREFIX string shoud be null-terminated!");
-#endif
 
 static_assert(strlen(CONFIG_BEACON_ID_BUILDER) == 3, "BEACON_ID_BUILDER string shoud be 3 char long!");
 static_assert(CONFIG_BEACON_ID_BUILDER[3] == 0, "BEACON_ID_BUILDER string shoud be null-terminated!");
 static_assert(strlen(CONFIG_BEACON_ID_VERSION) == 3, "BEACON_VERSION string shoud be 3 char long!");
 static_assert(CONFIG_BEACON_ID_VERSION[3] == 0, "BEACON_VERSION string shoud be null-terminated!");
-
-#ifdef CONFIG_BEACON_ID_OVERRIDE_MAC
-static_assert(strlen(CONFIG_BEACON_ID_OVERRIDE_VALUE) == 12, "CONFIG_BEACON_ID_OVERRIDE_VALUE string shoud be 12 char long!");
-static_assert(CONFIG_BEACON_ID_OVERRIDE_VALUE[12] == 0, "CONFIG_BEACON_ID_OVERRIDE_VALUE string shoud be null-terminated!");
-#endif
 
 #define uS_TO_mS_FACTOR 1000
 
@@ -76,15 +67,13 @@ uint64_t gpsSec = 0;
 uint64_t beaconSec = 0;
 uint8_t header_size;
 
+Config config;
 TinyGPSPlus gps;
 GPSCnx cnx(&gps);
 droneIDFR drone_idfr;
 LED led;
 
-char ssid[32];
-char id_suffix[13];
 char drone_id[33];
-uint8_t mac[6];
 
 esp_err_t event_handler(void *ctx, system_event_t *event) {
   return ESP_OK;
@@ -102,23 +91,23 @@ unsigned long IRAM_ATTR millis() {
 }
 
 void compute_ID() {
-#ifdef CONFIG_BEACON_ID_SWITCH
-  gpio_pulldown_en(GROUP_MSB_IO);
-  gpio_pulldown_en(GROUP_LSB_IO);
-  gpio_pulldown_en(MASS_MSB_IO);
-  gpio_pulldown_en(MASS_LSB_IO);
-  uint8_t model_group =      model_id_to_value[(gpio_get_level(GROUP_MSB_IO) << 1) + gpio_get_level(GROUP_LSB_IO)];
-  uint8_t model_mass_group = mass_id_to_value[(gpio_get_level(MASS_MSB_IO) << 1) + gpio_get_level(MASS_LSB_IO)];
-  gpio_pulldown_dis(GROUP_MSB_IO);
-  gpio_pulldown_dis(GROUP_LSB_IO);
-  gpio_pulldown_dis(MASS_MSB_IO);
-  gpio_pulldown_dis(MASS_LSB_IO);
-  snprintf(drone_id, 33, "%3s%3s00000000%1d%03d%12s",
-      CONFIG_BEACON_ID_BUILDER, CONFIG_BEACON_ID_VERSION, model_group, model_mass_group, id_suffix);
-#else
-  snprintf(drone_id, 33, "%3s%3s00000000%4s%12s",
-      CONFIG_BEACON_ID_BUILDER, CONFIG_BEACON_ID_VERSION, CONFIG_BEACON_ID_PREFIX, id_suffix);
-#endif
+  if (config.areSwitchesEnabled()) {
+    gpio_pulldown_en(GROUP_MSB_IO);
+    gpio_pulldown_en(GROUP_LSB_IO);
+    gpio_pulldown_en(MASS_MSB_IO);
+    gpio_pulldown_en(MASS_LSB_IO);
+    uint8_t model_group =      model_id_to_value[(gpio_get_level(GROUP_MSB_IO) << 1) + gpio_get_level(GROUP_LSB_IO)];
+    uint8_t model_mass_group = mass_id_to_value[(gpio_get_level(MASS_MSB_IO) << 1) + gpio_get_level(MASS_LSB_IO)];
+    gpio_pulldown_dis(GROUP_MSB_IO);
+    gpio_pulldown_dis(GROUP_LSB_IO);
+    gpio_pulldown_dis(MASS_MSB_IO);
+    gpio_pulldown_dis(MASS_LSB_IO);
+    snprintf(drone_id, 33, "%3s%3s00000000%1d%03d%12s",
+        config.getBuilder(), config.getVersion(), model_group, model_mass_group, config.getSuffix());
+  } else {
+    snprintf(drone_id, 33, "%3s%3s00000000%4s%12s",
+      config.getBuilder(), config.getVersion(), config.getPrefix(), config.getSuffix());
+  }
   ESP_LOGD(TAG, "Computed ID: %s", drone_id);
 }
 
@@ -195,79 +184,33 @@ void low_power(uint32_t delay_ms = 0) {
   ESP_LOGV(TAG, "%ld Wakeup", millis());
 }
 
-void print_config() {
-  const esp_app_desc_t *app = esp_ota_get_app_description();
-  ESP_LOGI(TAG, "Starting Beacon (%s) version %s", app->project_name, app->version);
-  ESP_LOGI(TAG, "MAC address: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  ESP_LOGI(TAG, "SSID: %s", ssid);
-  ESP_LOGI(TAG, "ID Builder: %s", CONFIG_BEACON_ID_BUILDER);
-  ESP_LOGI(TAG, "ID Version: %s", CONFIG_BEACON_ID_VERSION);
-#ifdef CONFIG_BEACON_ID_OVERRIDE_MAC
-  ESP_LOGI(TAG, "ID Suffix (overriden): %s", id_suffix);
-#else
-  ESP_LOGI(TAG, "ID Suffix (from MAC): %s", id_suffix);
-#endif
-#ifdef CONFIG_BEACON_GPS_MOCK
-  ESP_LOGI(TAG, "GPS Model: mock");
-#endif
-#ifdef CONFIG_BEACON_GPS_L96_I2C
-  ESP_LOGI(TAG, "GPS Model: L96 (I2C)");
-  ESP_LOGI(TAG, "IO for SCL: %d", CONFIG_BEACON_GPS_SCL_IO);
-  ESP_LOGI(TAG, "IO for SDA: %d", CONFIG_BEACON_GPS_SDA_IO);
-#endif
-#ifdef CONFIG_BEACON_GPS_L96_UART
-  ESP_LOGI(TAG, "GPS Model: L96 (UART + PPS)");
-  ESP_LOGI(TAG, "IO for PPS: %d", PPS_IO);
-#endif
-#ifdef CONFIG_BEACON_GPS_L80R_UART
-  ESP_LOGI(TAG, "GPS Model: L80R (UART + PPS)");
-  ESP_LOGI(TAG, "IO for PPS: %d", PPS_IO);
-#endif
-#ifdef CONFIG_BEACON_GPS_BN_220_UART
-  ESP_LOGI(TAG, "GPS Model: BN-220 (UART)");
-#endif
-#ifdef CONFIG_BEACON_ID_SWITCH
-  ESP_LOGI(TAG, "Swiches are enabled.");
-  ESP_LOGI(TAG, "  - IO for Group MSB: %d", GROUP_MSB_IO);
-  ESP_LOGI(TAG, "  - IO for Group LSB: %d", GROUP_LSB_IO);
-  ESP_LOGI(TAG, "  - IO for Mass MSB: %d", MASS_MSB_IO);
-  ESP_LOGI(TAG, "  - IO for Mass LSB: %d", MASS_LSB_IO);
-#else
-  ESP_LOGI(TAG, "Swiches are disabled.");
-  ESP_LOGI(TAG, "Hard coded prefix: %s", CONFIG_BEACON_ID_PREFIX);
-#endif
-}
-
 void setup() {
+  uint8_t mac[6];
+  nvs_flash_init();
   ESP_ERROR_CHECK( esp_read_mac(mac, ESP_MAC_WIFI_STA) );
-#ifdef CONFIG_BEACON_ID_OVERRIDE_MAC
-  strncpy(id_suffix, CONFIG_BEACON_ID_OVERRIDE_VALUE, sizeof(id_suffix));
-# else
-  snprintf(id_suffix, 13, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-#endif
-  snprintf(ssid, 32, "%3s_%s", CONFIG_BEACON_ID_BUILDER, id_suffix);
-  const size_t ssid_size = (sizeof(ssid) / sizeof(*ssid)) - 1; // remove trailling null termination
-  beaconPacket[40] = ssid_size;  // set size
+  config.begin(mac);
+  config.printConfig();
+  const char *ssid = config.getSSID();
+  const uint8_t ssid_size = strlen(ssid);
+  beaconPacket[40] = strlen(ssid);  // set size
   memcpy(&beaconPacket[41], ssid, ssid_size); // set ssid
   memcpy(&beaconPacket[10], mac, 6); // set mac as source
   memcpy(&beaconPacket[16], mac, 6); // set mac as filter
   header_size = 41 + ssid_size;
-  print_config();
-#ifdef CONFIG_BEACON_ID_SWITCH
-  gpio_pad_select_gpio(GROUP_MSB_IO);
-  gpio_pad_select_gpio(GROUP_LSB_IO);
-  gpio_pad_select_gpio(MASS_MSB_IO);
-  gpio_pad_select_gpio(MASS_LSB_IO);
-  gpio_set_direction(GROUP_MSB_IO, GPIO_MODE_INPUT);
-  gpio_set_direction(GROUP_LSB_IO, GPIO_MODE_INPUT);
-  gpio_set_direction(MASS_MSB_IO, GPIO_MODE_INPUT);
-  gpio_set_direction(MASS_LSB_IO, GPIO_MODE_INPUT);
-#endif
+  if (config.areSwitchesEnabled()) {
+    gpio_pad_select_gpio(GROUP_MSB_IO);
+    gpio_pad_select_gpio(GROUP_LSB_IO);
+    gpio_pad_select_gpio(MASS_MSB_IO);
+    gpio_pad_select_gpio(MASS_LSB_IO);
+    gpio_set_direction(GROUP_MSB_IO, GPIO_MODE_INPUT);
+    gpio_set_direction(GROUP_LSB_IO, GPIO_MODE_INPUT);
+    gpio_set_direction(MASS_MSB_IO, GPIO_MODE_INPUT);
+    gpio_set_direction(MASS_LSB_IO, GPIO_MODE_INPUT);
+  }
 #if defined(CONFIG_BEACON_GPS_L80R_UART) || defined(CONFIG_BEACON_GPS_L96_UART)
   gpio_pad_select_gpio(PPS_IO);
   gpio_set_direction(PPS_IO, GPIO_MODE_INPUT);
 #endif
-  nvs_flash_init();
   ESP_ERROR_CHECK( esp_netif_init() );
   ESP_ERROR_CHECK( esp_event_loop_create_default() );
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();

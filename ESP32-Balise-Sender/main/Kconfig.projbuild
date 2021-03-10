@@ -13,58 +13,34 @@ menu "Beacon Configuration"
             help
               Should be a 3 char [0-9] string only!!
     
-        config BEACON_ID_OVERRIDE_MAC
-            bool "Override MAC in ID and SSID"
-            default false
-            help
-                Choose a 12 char long specific string
-                It will be used in FR ID and in the Wifi SSID
-        
-        config BEACON_ID_OVERRIDE_VALUE
-            string "Value to use to override MAC in ID and SSID" if BEACON_ID_OVERRIDE_MAC
-            default "0123456789AB"
-            help
-                A user-defined 12 char long string
-
-        config BEACON_ID_SWITCH
-            bool "Enable Switches to set ID"
-            default false
-            help
-                Will allow you to choose 4 switches used to set ID dynamically
-
         config BEACON_ID_GROUP_MSB_IO
-            int "Model Group MSB GPIO number" if BEACON_ID_SWITCH
+            int "Model Group MSB GPIO number"
             range 0 34
             default 26
             help
                 GPIO number (IOxx) to use
 
         config BEACON_ID_GROUP_LSB_IO
-            int "Model Group LSB GPIO number" if BEACON_ID_SWITCH
+            int "Model Group LSB GPIO number"
             range 0 34
             default 27
             help
                 GPIO number (IOxx) to use
 
         config BEACON_ID_MASS_MSB_IO
-            int "Model Weigh Class MSB GPIO number" if BEACON_ID_SWITCH
+            int "Model Weigh Class MSB GPIO number"
             range 0 34
             default 14
             help
                 GPIO number (IOxx) to use
 
         config BEACON_ID_MASS_LSB_IO
-            int "Model Weigh Class LSB GPIO number" if BEACON_ID_SWITCH
+            int "Model Weigh Class LSB GPIO number"
             range 0 34
             default 25
             help
                 GPIO number (IOxx) to use
         
-        config BEACON_ID_PREFIX
-            string "4-char long hard coded ID Prefix" if !BEACON_ID_SWITCH
-            default "0000"
-            help
-                Free Value, 4 char
     endmenu
     menu "GPS configuration"
         choice BEACON_GPS_MODEL

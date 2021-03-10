@@ -1,2 +1,5 @@
 build
 sdkconfig
+csv
+bin
+nvs_configs/values*.csv
