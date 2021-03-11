@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 
 #define DEG_TO_RAD 0.017453292519943295769236907684886
 #define radians(deg) ((deg)*DEG_TO_RAD)

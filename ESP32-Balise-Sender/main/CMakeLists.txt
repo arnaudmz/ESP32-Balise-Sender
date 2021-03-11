@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.cpp" "TinyGPS++.cpp" "GPSCnx.cpp" "LED.cpp" "Config.cpp"
+idf_component_register(SRCS "Beacon.cpp" "Switches.cpp" "main.cpp" "TinyGPS++.cpp" "GPSCnx.cpp" "LED.cpp" "Config.cpp" "Switches.cpp" "Beacon.cpp"
                     INCLUDE_DIRS "."
                     REQUIRES soc ulp app_update nvs_flash)
 
