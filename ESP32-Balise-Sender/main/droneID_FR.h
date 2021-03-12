@@ -388,7 +388,7 @@ public:
      */
      bool has_pass_time() {
         std::chrono::duration<double> elapsed = std::chrono::high_resolution_clock::now() - _last_send;
-        return elapsed.count() + _data_period_GPS >= FRAME_TIME_LIMIT;
+        return elapsed.count() + _data_period_GPS >= FRAME_TIME_LIMIT * 1.2;
     }
     /**
      * Notifie quand le drone a bougé de plus de 30m en moins de 3s.
