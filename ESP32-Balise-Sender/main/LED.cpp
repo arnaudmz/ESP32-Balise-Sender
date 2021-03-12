@@ -7,7 +7,7 @@ extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
 extern uint32_t ulp_cmd;
 
-void LED::begin() {
+LED::LED(): fade_state(false) {
   ESP_ERROR_CHECK( ulp_load_binary(0, bin_start,(bin_end - bin_start) / sizeof(uint32_t)) );
   ulp_start(&ulp_entry);
 }

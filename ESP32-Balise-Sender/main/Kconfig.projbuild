@@ -43,54 +43,8 @@ menu "Beacon Configuration"
         
     endmenu
     menu "GPS configuration"
-        choice BEACON_GPS_MODEL
-            prompt "GPS Model"
-            default BEACON_GPS_BN_220_UART
-            help
-                The type of GPS module connected to the beacon
-
-            config BEACON_GPS_MOCK
-                bool "Mock (not a real device)"
-                help
-                    Useful to send beacons every 3 seconds, even if no device
-            config BEACON_GPS_BN_220_UART
-                bool "BN-220 (UART preconfigured in 115200)"
-                help
-                    Must be preconfigured in 115200 bauds and to send only GNRMC and GNGGA NMEA
-                    messages
-            config BEACON_GPS_L80R_UART
-                bool "L80R (UART, dynamicaly configured)"
-                help
-                    Quectel L80-R GPS
-
-                    Will be auto-configured at boot time
-            config BEACON_GPS_L96_UART
-                bool "L96 (UART, preconfigured in 115200)"
-                help
-                    Quectel L96 GPS using PPS + UART
-
-                    Must be preconfigured in 115200 bauds with PPS enabled (140ms long peaks)
-            config BEACON_GPS_L96_I2C
-                bool "L96 (I2C)"
-                help
-                    Quectel L96 GPS using I2C port
-        endchoice
-        config BEACON_GPS_SDA_IO
-            int "GPS SDA GPIO number" if BEACON_GPS_L96_I2C
-            range 0 34
-            default 16
-            help
-                GPIO number (IOxx) to use for I2C Data
-
-        config BEACON_GPS_SCL_IO
-            int "GPS SCL GPIO number" if BEACON_GPS_L96_I2C
-            range 0 34
-            default 17
-            help
-                GPIO number (IOxx) to use for I2C Clock
-
         config BEACON_GPS_PPS_IO
-            int "GPS PPS GPIO number" if BEACON_GPS_L80R_UART || BEACON_GPS_L96_UART
+            int "GPS PPS GPIO number"
             range 0 34
             default 4
             help

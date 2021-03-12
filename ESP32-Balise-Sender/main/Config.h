@@ -4,6 +4,13 @@
 #include "nvs.h"
 #include "driver/gpio.h"
 
+enum GPSModel {
+  GPS_MODEL_MOCK = 0,
+  GPS_MODEL_L80R,
+  GPS_MODEL_BN_220,
+  GPS_MODEL_L96_UART
+};
+
 class Config {
   public:
     Config();
@@ -20,11 +27,11 @@ class Config {
     gpio_num_t getGroupLSBPort();
     gpio_num_t getMassMSBPort();
     gpio_num_t getMassLSBPort();
-#if defined(CONFIG_BEACON_GPS_L80R_UART) || defined(CONFIG_BEACON_GPS_L96_UART)
     gpio_num_t getPPSPort();
-#endif //#if defined(CONFIG_BEACON_GPS_L80R_UART) || defined(CONFIG_BEACON_GPS_L96_UART)
+    GPSModel getGPSModel();
   private:
     esp_err_t getFixedStr(nvs_handle_t h, const char*name, char *st, uint8_t len);
+    GPSModel model;
     bool switchesEnabled;
     bool hardcodedSuffixEnabled;
     uint8_t macAddr[6];

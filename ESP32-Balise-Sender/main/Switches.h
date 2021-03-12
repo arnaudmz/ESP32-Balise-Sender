@@ -6,8 +6,7 @@
 
 class Switches {
   public:
-    Switches(Config *c): config(c) {}
-    void begin();
+    Switches(Config *c);
     bool enabled();
     int getGroupMSBState();
     int getGroupLSBState();

@@ -18,12 +18,40 @@ static_assert(strlen(CONFIG_BEACON_ID_VERSION) == 3, "BEACON_VERSION string shou
 static_assert(CONFIG_BEACON_ID_VERSION[3] == 0, "BEACON_VERSION string shoud be null-terminated!");
 
 Config::Config():
-  switchesEnabled(true),
-  hardcodedSuffixEnabled(false),
-  idBuilder(CONFIG_BEACON_ID_BUILDER),
-  idVersion(CONFIG_BEACON_ID_VERSION),
-  idPrefix(""),
-  idSuffix("") {}
+model(GPS_MODEL_L80R),
+switchesEnabled(true),
+hardcodedSuffixEnabled(false),
+idBuilder(CONFIG_BEACON_ID_BUILDER),
+idVersion(CONFIG_BEACON_ID_VERSION),
+idPrefix(""),
+idSuffix("") {
+  nvs_flash_init();
+  ESP_ERROR_CHECK( esp_read_mac(macAddr, ESP_MAC_WIFI_STA) );
+  nvs_handle_t my_nvs_handle;
+  esp_err_t err;
+  snprintf(idSuffix, 13, "%02X%02X%02X%02X%02X%02X", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
+  err = nvs_open("beacon", NVS_READONLY, &my_nvs_handle);
+  if (err != ESP_OK) {
+    ESP_LOGI(TAG, "No config in NVS (%s), using factory settings", esp_err_to_name(err));
+  } else {
+    getFixedStr(my_nvs_handle, "ovr_builder", idBuilder, sizeof(idBuilder));
+    getFixedStr(my_nvs_handle, "ovr_version", idVersion, sizeof(idVersion));
+    switchesEnabled = (getFixedStr(my_nvs_handle, "ovr_prefix", idPrefix, sizeof(idPrefix)) != ESP_OK);
+    hardcodedSuffixEnabled = (getFixedStr(my_nvs_handle, "ovr_suffix", idSuffix, sizeof(idSuffix)) == ESP_OK);
+    err = nvs_get_u8(my_nvs_handle, "gps_model", (uint8_t *)&model);
+    switch (err) {
+      case ESP_OK:
+        ESP_LOGI(TAG, "Overriding GPS Model to %d", model);
+        break;
+      case ESP_ERR_NVS_NOT_FOUND:
+        ESP_LOGI(TAG, "Using Default GPS Model (%d)", model);
+        break;
+      default:
+        ESP_LOGE(TAG, "Error getting model: %s", esp_err_to_name(err));
+    }
+  }
+  snprintf(ssid, 32, "%3s_%12s", idBuilder, idSuffix);
+}
 
 esp_err_t Config::getFixedStr(nvs_handle_t h, const char*name, char *st, uint8_t len) {
   char tmp_str[16];
@@ -47,23 +75,9 @@ esp_err_t Config::getFixedStr(nvs_handle_t h, const char*name, char *st, uint8_t
   return ESP_OK;
 }
 
-void Config::begin() {
-  nvs_flash_init();
-  ESP_ERROR_CHECK( esp_read_mac(macAddr, ESP_MAC_WIFI_STA) );
-  nvs_handle_t my_nvs_handle;
-  esp_err_t err;
-  snprintf(idSuffix, 13, "%02X%02X%02X%02X%02X%02X", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
-  err = nvs_open("beacon", NVS_READONLY, &my_nvs_handle);
-  if (err != ESP_OK) {
-    ESP_LOGI(TAG, "No config in NVS (%s), using factory settings", esp_err_to_name(err));
-    return;
-  }
-  getFixedStr(my_nvs_handle, "ovr_builder", idBuilder, sizeof(idBuilder));
-  getFixedStr(my_nvs_handle, "ovr_version", idVersion, sizeof(idVersion));
-  switchesEnabled = (getFixedStr(my_nvs_handle, "ovr_prefix", idPrefix, sizeof(idPrefix)) != ESP_OK);
-  hardcodedSuffixEnabled = (getFixedStr(my_nvs_handle, "ovr_suffix", idSuffix, sizeof(idSuffix)) == ESP_OK);
+GPSModel Config::getGPSModel() {
+  return model;
 }
-
 
 bool Config::areSwitchesEnabled() {
   return switchesEnabled;
@@ -105,11 +119,9 @@ gpio_num_t Config::getMassLSBPort() {
   return (gpio_num_t)CONFIG_BEACON_ID_MASS_LSB_IO;
 }
 
-#if defined(CONFIG_BEACON_GPS_L80R_UART) || defined(CONFIG_BEACON_GPS_L96_UART)
 gpio_num_t Config::getPPSPort() {
   return (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO;
 }
-#endif //#if defined(CONFIG_BEACON_GPS_L80R_UART) || defined(CONFIG_BEACON_GPS_L96_UART)
 
 void Config::printConfig() {
   const esp_app_desc_t *app = esp_ota_get_app_description();
@@ -119,25 +131,22 @@ void Config::printConfig() {
   ESP_LOGI(TAG, "ID Builder: %s", idBuilder);
   ESP_LOGI(TAG, "ID Version: %s", idVersion);
   ESP_LOGI(TAG, "ID Suffix: %s (%s)", idSuffix, hardcodedSuffixEnabled ? "Hardcoded": "from MAC");
-#ifdef CONFIG_BEACON_GPS_MOCK
-  ESP_LOGI(TAG, "GPS Model: mock");
-#endif
-#ifdef CONFIG_BEACON_GPS_L96_I2C
-  ESP_LOGI(TAG, "GPS Model: L96 (I2C)");
-  ESP_LOGI(TAG, "IO for SCL: %d", CONFIG_BEACON_GPS_SCL_IO);
-  ESP_LOGI(TAG, "IO for SDA: %d", CONFIG_BEACON_GPS_SDA_IO);
-#endif
-#ifdef CONFIG_BEACON_GPS_L96_UART
-  ESP_LOGI(TAG, "GPS Model: L96 (UART + PPS)");
-  ESP_LOGI(TAG, "IO for PPS: %d", getPPSPort());
-#endif
-#ifdef CONFIG_BEACON_GPS_L80R_UART
-  ESP_LOGI(TAG, "GPS Model: L80R (UART + PPS)");
-  ESP_LOGI(TAG, "IO for PPS: %d", getPPSPort());
-#endif
-#ifdef CONFIG_BEACON_GPS_BN_220_UART
-  ESP_LOGI(TAG, "GPS Model: BN-220 (UART)");
-#endif
+  switch (model) {
+    case GPS_MODEL_MOCK:
+      ESP_LOGI(TAG, "GPS Model: mock");
+      break;
+    case GPS_MODEL_L96_UART:
+      ESP_LOGI(TAG, "GPS Model: L96 (UART + PPS)");
+      ESP_LOGI(TAG, "IO for PPS: %d", getPPSPort());
+      break;
+    case GPS_MODEL_L80R:
+      ESP_LOGI(TAG, "GPS Model: L80R (UART + PPS)");
+      ESP_LOGI(TAG, "IO for PPS: %d", getPPSPort());
+      break;
+    case GPS_MODEL_BN_220:
+      ESP_LOGI(TAG, "GPS Model: BN-220 (UART)");
+      break;
+  }
   if (switchesEnabled) {
     ESP_LOGI(TAG, "Swiches are enabled:");
     ESP_LOGI(TAG, "  - IO for Group MSB: %d", getGroupMSBPort());

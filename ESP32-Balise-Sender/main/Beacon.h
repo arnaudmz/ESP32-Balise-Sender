@@ -11,11 +11,8 @@
 class Beacon {
   public:
     Beacon(Config *c, LED *l, Switches *s, droneIDFR *d, TinyGPSPlus *g);
-    void begin();
     void handleData();
-#ifdef CONFIG_BEACON_GPS_MOCK
     bool hasSetHomeYet() { return hasSetHome; }
-#endif //#ifdef CONFIG_BEACON_GPS_MOCK
 
   private:
     void sendBeacon(const uint8_t *packet, const uint8_t to_send);

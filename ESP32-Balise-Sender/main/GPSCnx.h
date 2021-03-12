@@ -5,21 +5,28 @@
 #include "driver/uart.h"
 #include "driver/i2c.h"
 #include "TinyGPS++.h"
+#include "Config.h"
 #include "Beacon.h"
 #define RX_BUF_SIZE 1024
 
 class GPSCnx {
   public:
-    GPSCnx(TinyGPSPlus *gps): gps(gps) {}
-    void begin();
-    uint32_t waitForChars(int first_timeout_ms = 1000, int next_timeout_ms = 20, bool inject = true);
-#ifdef CONFIG_BEACON_GPS_MOCK
-    void setBeacon(Beacon *b);
-#endif //#ifdef CONFIG_BEACON_GPS_MOCK
-  private:
+    GPSCnx(Config *config, TinyGPSPlus *gps): config(config), gps(gps) {}
+    virtual uint32_t waitForChars(int first_timeout_ms = 1000, int next_timeout_ms = 20, bool inject = true);
+    virtual void lowPower(uint32_t delay_ms = 0);
+  protected:
+    uint8_t computeNMEACksum(const char *st);
+    void injectIfNeeded(uint32_t nb_chars, bool inject);
+    Config *config;
     TinyGPSPlus *gps;
     uint8_t rxBuffer[RX_BUF_SIZE];
-#ifdef CONFIG_BEACON_GPS_MOCK
+};
+
+class GPSMockCnx: public GPSCnx {
+  public:
+    GPSMockCnx(Config *config, TinyGPSPlus *gps, Beacon *b): GPSCnx(config, gps), beacon(b) { }
+    virtual uint32_t waitForChars(int first_timeout_ms = 1000, int next_timeout_ms = 20, bool inject = true);
+  private:
     Beacon *beacon;
     char mock_msg[256];
     double mockGPSHomeLat = 4843.20138;
@@ -30,19 +37,37 @@ class GPSCnx {
     int mockGPSMaxHeight = 150;
     int mockGPSMinHeight = 10;
     void computeMockMsg();
-#endif //#ifdef CONFIG_BEACON_GPS_MOCK
-#ifdef CONFIG_BEACON_GPS_L96_I2C
-    const i2c_port_t i2cPort  = I2C_NUM_0;
-    uint8_t i2cBuf[I2C_BUF_SIZE];
-    void i2cSetup();
-#endif //ifdef CONFIG_BEACON_GPS_L96_I2C
-#if defined(CONFIG_BEACON_GPS_L96_UART) || defined(CONFIG_BEACON_GPS_L80R_UART) || defined(CONFIG_BEACON_GPS_BN_220_UART)
+};
+
+class GPSUARTCnx: public GPSCnx {
+  public:
+    GPSUARTCnx(Config *config, TinyGPSPlus *gps): GPSCnx(config, gps) {}
+    virtual uint32_t waitForChars(int first_timeout_ms = 1000, int next_timeout_ms = 20, bool inject = true);
+  protected:
     const uart_port_t uartPort = UART_NUM_2;
-    void uartSetup();
-    void uartSendPMTK(const char *st);
+    void uartSendNMEA(const char *st);
     void uartWaitForSilence(int timeout_ms = 30);
-#endif //#if defined(CONFIG_BEACON_GPS_L96_UART) || defined(CONFIG_BEACON_GPS_L80R_UART) || defined(CONFIG_BEACON_GPS_BN_220_UART)
-    uint8_t computePMTKCksum(const char *st);
+};
+
+class GPSBN220Cnx: public GPSUARTCnx {
+  public:
+    GPSBN220Cnx(Config *config, TinyGPSPlus *gps);
+};
+
+class GPSPPSUARTCnx: public GPSUARTCnx {
+  public:
+    GPSPPSUARTCnx(Config *config, TinyGPSPlus *gps);
+    virtual void lowPower(uint32_t delay_ms = 0);
+};
+
+class GPSL80RCnx: public GPSPPSUARTCnx {
+  public:
+    GPSL80RCnx(Config *config, TinyGPSPlus *gps);
+};
+
+class GPSL96Cnx: public GPSPPSUARTCnx {
+  public:
+    GPSL96Cnx(Config *config, TinyGPSPlus *gps);
 };
 
 #endif //ifndef __GPSCnx_h

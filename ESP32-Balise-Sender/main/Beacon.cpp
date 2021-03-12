@@ -43,10 +43,6 @@ led(l),
 switches(s),
 droneID(d),
 gps(g) {
-
-}
-
-void Beacon::begin() {
   const char *ssid = config->getSSID();
   const uint8_t ssid_size = strlen(ssid);
   beaconPacket[40] = strlen(ssid);  // set size

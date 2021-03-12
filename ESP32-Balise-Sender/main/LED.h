@@ -10,7 +10,7 @@
 
 class LED {
   public:
-    LED():fade_state(false) {}
+    LED();
     void begin();
     void blinkOnce();
     void blinkTwice();
@@ -18,8 +18,8 @@ class LED {
     void fadeOut();
     void toggleFade();
   private:
-    bool fade_state;
     void ulp_start(uint32_t *func_addr);
+    bool fade_state;
 };
 
 #endif //ifndef __LED_h

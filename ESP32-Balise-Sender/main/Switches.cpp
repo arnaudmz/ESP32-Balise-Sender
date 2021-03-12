@@ -2,7 +2,7 @@
 // vim:et:sts=2:sw=2:si
 #include "Switches.h"
 
-void Switches::begin()  {
+Switches::Switches(Config *config): config(config) {
   if (enabled()) {
     prepareIO(config->getGroupMSBPort());
     prepareIO(config->getGroupLSBPort());
