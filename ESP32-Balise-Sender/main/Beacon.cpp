@@ -99,7 +99,7 @@ void Beacon::computeAndSendBeaconIfNeeded() {
     float time_elapsed = (float(millis() - beaconSec) / 1000.0);
     beaconSec = millis();
 
-    ESP_LOGI(TAG, "%.1fs Send beacon: (cause: %s) with %.1fm Speed=%f",
+    ESP_LOGI(TAG, "%.1fs Send beacon: (cause: %s) with %.1fm Speed=%.1f",
         time_elapsed, droneID->has_pass_distance() ? "Distance" : "Time",
         droneID->get_distance_from_last_position_sent(),
         droneID->get_ground_speed_kmh());
@@ -115,7 +115,7 @@ void Beacon::computeAndSendBeaconIfNeeded() {
 
 void Beacon::handleData() {
   if (!gps->location.isValid()) {
-    ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %lf, time: %02d:%02d:%02d",
+    ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %.2lf, time: %02d:%02d:%02d",
         gpsSec++,
         gps->satellites.value(),
         gps->hdop.hdop(),
@@ -139,7 +139,7 @@ void Beacon::handleData() {
     droneID->set_heading(gps->course.deg());
     droneID->set_ground_speed(gps->speed.mps());
     droneID->set_heigth(gps->altitude.meters() - homeAlt);
-    ESP_LOGI(TAG, "%d:%02d:%02dZ: lng=%.4f, lat=%.4f, satt=%d, hdop=%f",
+    ESP_LOGI(TAG, "%d:%02d:%02dZ: lng=%.4f, lat=%.4f, satt=%d, hdop=%.2f",
       gps->time.hour(),
       gps->time.minute(),
       gps->time.second(),
