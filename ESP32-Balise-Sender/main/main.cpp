@@ -1,5 +1,6 @@
 // vim:et:sts=2:sw=2:si
 #include "freertos/FreeRTOS.h"
+#include "driver/gpio.h"
 
 #include "Config.h"
 #include "Switches.h"
@@ -51,7 +52,7 @@ void loop(Config *config, GPSCnx * cnx, Beacon *beacon) {
   }
 }
 
-extern "C" void app_main(void) {
+void normal_run(void) {
   Config config;
   config.printConfig();
   Switches switches(&config);
@@ -78,5 +79,25 @@ extern "C" void app_main(void) {
   }
   while(true) {
     loop(&config, cnx, &beacon);
+  }
+}
+
+void ble_serve(Config *config, LED *led);
+
+void maintenance_run(void) {
+  Config config;
+  config.printConfig();
+  LED led;
+  ble_serve(&config, &led);
+}
+
+extern "C" void app_main(void) {
+  bool is_maintenance = (gpio_get_level((gpio_num_t)3) == 0);
+  if (is_maintenance) {
+    ESP_LOGI(TAG, "Starting in maintenance mode");
+    maintenance_run();
+  } else {
+    ESP_LOGI(TAG, "Starting in normal mode");
+    normal_run();
   }
 }
