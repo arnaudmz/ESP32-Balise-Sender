@@ -32,6 +32,10 @@ void LED::fadeOut() {
   ulp_cmd = 4;
 }
 
+void LED::blinkFastForever() {
+  ulp_cmd = 5;
+}
+
 void LED::toggleFade() {
   if (!fade_state) {
     fadeIn();

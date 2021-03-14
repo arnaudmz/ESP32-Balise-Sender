@@ -12,10 +12,17 @@
 static constexpr char TAG[] = "Config";
 #include "esp_log.h"
 
-static_assert(strlen(CONFIG_BEACON_ID_BUILDER) == 3, "BEACON_ID_BUILDER string shoud be 3 char long!");
+static_assert(strlen(CONFIG_BEACON_ID_BUILDER) == Config::BUILDER_LENGTH, "BEACON_ID_BUILDER string shoud be 3 char long!");
 static_assert(CONFIG_BEACON_ID_BUILDER[3] == 0, "BEACON_ID_BUILDER string shoud be null-terminated!");
-static_assert(strlen(CONFIG_BEACON_ID_VERSION) == 3, "BEACON_VERSION string shoud be 3 char long!");
+static_assert(strlen(CONFIG_BEACON_ID_VERSION) == Config::VERSION_LENGTH, "BEACON_VERSION string shoud be 3 char long!");
 static_assert(CONFIG_BEACON_ID_VERSION[3] == 0, "BEACON_VERSION string shoud be null-terminated!");
+    
+static constexpr char BUILDER_NVS_NAME[] = "ovr_builder";
+static constexpr char VERSION_NVS_NAME[] = "ovr_version";
+static constexpr char PREFIX_NVS_NAME[] = "ovr_prefix";
+static constexpr char SUFFIX_NVS_NAME[] = "ovr_suffix";
+static constexpr char GPS_MODEL_NVS_NAME[] = "gps_model";
+static constexpr char NVS_HANDLE_NAME[] = "beacon";
 
 Config::Config():
 model(GPS_MODEL_L80R),
@@ -30,15 +37,15 @@ idSuffix("") {
   nvs_handle_t my_nvs_handle;
   esp_err_t err;
   snprintf(idSuffix, 13, "%02X%02X%02X%02X%02X%02X", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
-  err = nvs_open("beacon", NVS_READONLY, &my_nvs_handle);
+  err = nvs_open(NVS_HANDLE_NAME, NVS_READONLY, &my_nvs_handle);
   if (err != ESP_OK) {
     ESP_LOGI(TAG, "No config in NVS (%s), using factory settings", esp_err_to_name(err));
   } else {
-    getFixedStr(my_nvs_handle, "ovr_builder", idBuilder, sizeof(idBuilder));
-    getFixedStr(my_nvs_handle, "ovr_version", idVersion, sizeof(idVersion));
-    switchesEnabled = (getFixedStr(my_nvs_handle, "ovr_prefix", idPrefix, sizeof(idPrefix)) != ESP_OK);
-    hardcodedSuffixEnabled = (getFixedStr(my_nvs_handle, "ovr_suffix", idSuffix, sizeof(idSuffix)) == ESP_OK);
-    err = nvs_get_u8(my_nvs_handle, "gps_model", (uint8_t *)&model);
+    getFixedStr(my_nvs_handle, BUILDER_NVS_NAME, idBuilder, sizeof(idBuilder));
+    getFixedStr(my_nvs_handle, VERSION_NVS_NAME, idVersion, sizeof(idVersion));
+    switchesEnabled = (getFixedStr(my_nvs_handle, PREFIX_NVS_NAME, idPrefix, sizeof(idPrefix)) != ESP_OK);
+    hardcodedSuffixEnabled = (getFixedStr(my_nvs_handle, SUFFIX_NVS_NAME, idSuffix, sizeof(idSuffix)) == ESP_OK);
+    err = nvs_get_u8(my_nvs_handle, GPS_MODEL_NVS_NAME, (uint8_t *)&model);
     switch (err) {
       case ESP_OK:
         ESP_LOGI(TAG, "Overriding GPS Model to %d", model);
@@ -73,6 +80,9 @@ esp_err_t Config::getFixedStr(nvs_handle_t h, const char*name, char *st, uint8_t
   strncpy(st, tmp_str, size);
   ESP_LOGD(TAG, "Read %s=%s from nvs", name, st);
   return ESP_OK;
+}
+const char *Config::getAppVersion() {
+  return esp_ota_get_app_description()->version;
 }
 
 GPSModel Config::getGPSModel() {
@@ -160,4 +170,89 @@ void Config::printConfig() {
 
 const uint8_t *Config::getMACAddr() {
   return macAddr;
+}
+
+esp_err_t Config::setBuilder(const uint8_t *newBuilder) {
+  return setValue(BUILDER_NVS_NAME, (const char *)newBuilder, BUILDER_LENGTH);
+}
+
+esp_err_t Config::setVersion(const uint8_t *newBuilder) {
+  return setValue(VERSION_NVS_NAME, (const char *)newBuilder, VERSION_LENGTH);
+}
+
+esp_err_t Config::setPrefix(const uint8_t *newBuilder) {
+  return setValue(PREFIX_NVS_NAME, (const char *)newBuilder, PREFIX_LENGTH);
+}
+
+esp_err_t Config::setSuffix(const uint8_t *newBuilder) {
+  return setValue(SUFFIX_NVS_NAME, (const char *)newBuilder, SUFFIX_LENGTH);
+}
+
+esp_err_t Config::setGPSModel(const GPSModel model) {
+  nvs_handle_t handle;
+  esp_err_t err = getWriteNVSHandle(&handle);
+  if(err != ESP_OK) {
+    ESP_LOGE(TAG, "Error getting NVS write handle: %s", esp_err_to_name(err));
+    return err;
+  }
+  err = nvs_set_u8(handle, GPS_MODEL_NVS_NAME, (uint8_t) model);
+  nvs_close(handle);
+  return err;
+}
+
+
+esp_err_t Config::resetBuilder() {
+  return resetValue(BUILDER_NVS_NAME);
+}
+
+esp_err_t Config::resetVersion() {
+  return resetValue(VERSION_NVS_NAME);
+}
+
+esp_err_t Config::resetPrefix() {
+  return resetValue(PREFIX_NVS_NAME);
+}
+
+esp_err_t Config::resetSuffix() {
+  return resetValue(SUFFIX_NVS_NAME);
+}
+
+esp_err_t Config::resetGPSModel() {
+  return resetValue(GPS_MODEL_NVS_NAME);
+}
+
+esp_err_t Config::resetValue(const char *name) {
+  nvs_handle_t handle;
+  esp_err_t err = getWriteNVSHandle(&handle);
+  if(err != ESP_OK) {
+    ESP_LOGE(TAG, "Error getting NVS write handle: %s", esp_err_to_name(err));
+    return err;
+  }
+  ESP_LOGI(TAG, "Resetting conf in NVS for %s", name);
+  err = nvs_erase_key(handle, name);
+  nvs_close(handle);
+  return err;
+}
+
+esp_err_t Config::getWriteNVSHandle(nvs_handle_t *handle) {
+  return nvs_open(NVS_HANDLE_NAME, NVS_READWRITE, handle);
+}
+
+esp_err_t Config::setValue(const char *name, const char *value, int len) {
+  if (len > 15) {
+    return ESP_ERR_NVS_VALUE_TOO_LONG;
+  }
+  nvs_handle_t handle;
+  esp_err_t err = getWriteNVSHandle(&handle);
+  if(err != ESP_OK) {
+    ESP_LOGE(TAG, "Error getting NVS write handle: %s", esp_err_to_name(err));
+    return err;
+  }
+  char st[16];
+  memcpy(st, value, len);
+  st[len] = '\0';
+  ESP_LOGI(TAG, "Setting conf in NVS for %s to %s", name, st);
+  err = nvs_set_str(handle, name, value);
+  nvs_close(handle);
+  return err;
 }

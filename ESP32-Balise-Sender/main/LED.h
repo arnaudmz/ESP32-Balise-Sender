@@ -11,12 +11,12 @@
 class LED {
   public:
     LED();
-    void begin();
     void blinkOnce();
     void blinkTwice();
     void fadeIn();
     void fadeOut();
     void toggleFade();
+    void blinkFastForever();
   private:
     void ulp_start(uint32_t *func_addr);
     bool fade_state;

@@ -18,6 +18,7 @@ entry:
 main_loop:
   move r3, cmd
   ld r0, r3, 0
+  jumpr blink_fast_forever_logic, 5, ge
   jumpr fade_out_logic, 4, ge
   jumpr fade_in_logic, 3, ge
   jumpr blink_twice_logic, 2, ge
@@ -99,6 +100,18 @@ fade_out_loop_next:
   sub r3, r3, 1
   jump main_loop_end, eq
   jump fade_out_loop_on
+
+// ======================================BLINK FAST FOREVER=====================
+blink_fast_forever_logic:
+  WRITE_RTC_REG(RTC_GPIO_ENABLE_W1TC_REG, RTC_GPIO_ENABLE_W1TS_S + gpio_2, 1, 1)
+  move r1, 10000
+  move r2, blink_fast_forever_off
+  jump delay
+blink_fast_forever_off:
+  WRITE_RTC_REG(RTC_GPIO_ENABLE_W1TS_REG, RTC_GPIO_ENABLE_W1TS_S + gpio_2, 1, 1)
+  move r1, 10000
+  move r2, main_loop
+  jump delay
   
 delay:
   wait  80                // wait 80 clock ticks at 8MHz -> 0.01ms
