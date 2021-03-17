@@ -121,7 +121,7 @@ void Beacon::handleData() {
     led->blinkOnce();
   } else {
     if (!hasSetHome) {
-      if (gps->satellites.value() > 6 && gps->hdop.hdop() < 2.0) {
+      if (gps->satellites.value() > 5 && gps->hdop.hdop() < 3.0) {
         hasSetHome = true;
         homeAlt = gps->altitude.meters();
         ESP_LOGI(TAG, "Setting Home Position, Altitude=%d", (int)homeAlt);
