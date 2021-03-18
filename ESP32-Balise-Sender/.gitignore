@@ -3,4 +3,5 @@ sdkconfig
 sdkconfig.old
 csv
 bin
+*.bin
 nvs_configs/values*.csv
