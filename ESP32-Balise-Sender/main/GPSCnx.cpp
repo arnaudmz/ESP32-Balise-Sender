@@ -169,16 +169,27 @@ void GPSMockCnx::computeMockMsg() {
   double lat;
   double longi;
   double heading;
-  double speed_in_knots;
-  int alt;
   char raw_gprmc_msg[120], raw_gpgga_msg[120];
   int gprmc_cksum, gpgga_cksum;
   if (!beacon->hasSetHomeYet()) {
     lat = mockGPSHomeLat;
     longi = mockGPSHomeLong;
     heading = 0;
-    speed_in_knots = 0.0;
-    alt = mockGPSHomeAlt;
+    alt = mockGPSHomeAlt + 10;
+    hdop -= 0.2;
+    if (nb_sat < 7) {
+      nb_sat ++;
+    }
+  } else if(!beacon->hasTakenOffYet()) {
+    lat = mockGPSHomeLat;
+    longi = mockGPSHomeLong;
+    heading = 0;
+    if (hdop > 1.3) {
+      hdop -= 0.2;
+      alt--;
+    } else {
+      speed_in_knots += 0.5;
+    }
   } else {
     int secs_from_start = millis() / 1000;
     double pos_angle = (double)secs_from_start * M_TWOPI / 66.33;
@@ -202,9 +213,11 @@ void GPSMockCnx::computeMockMsg() {
       speed_in_knots,
       heading);
   gprmc_cksum = computeNMEACksum(raw_gprmc_msg);
-  snprintf(raw_gpgga_msg, 128, "GPGGA,015606.000,%.4f,N,%.4f,E,1,7,1.28,%d.0,M,0.0,M,,",
+  snprintf(raw_gpgga_msg, 128, "GPGGA,015606.000,%.4f,N,%.4f,E,1,%d,%.2f,%d.0,M,0.0,M,,",
       lat,
       longi,
+      nb_sat,
+      hdop,
       alt);
   gpgga_cksum = computeNMEACksum(raw_gpgga_msg);
   snprintf(mock_msg, 256, "$%s*%2X\r\n$%s*%2X\r\n", raw_gprmc_msg, gprmc_cksum, raw_gpgga_msg, gpgga_cksum);

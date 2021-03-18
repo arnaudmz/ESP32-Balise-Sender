@@ -36,6 +36,10 @@ class GPSMockCnx: public GPSCnx {
     int mockGPSHomeAlt = 148;
     int mockGPSMaxHeight = 150;
     int mockGPSMinHeight = 10;
+    double hdop = 4.0;
+    uint8_t nb_sat = 3;
+    int alt;
+    double speed_in_knots = 0.0;
     void computeMockMsg();
 };
 

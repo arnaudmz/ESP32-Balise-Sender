@@ -121,7 +121,8 @@ void Beacon::handleData() {
     led->blinkOnce();
   } else {
     if (!hasSetHome) {
-      if (gps->satellites.value() > 5 && gps->hdop.hdop() < 3.0) {
+      if (gps->satellites.value() >= config->getGPSSatThrs() && gps->hdop.hdop() <= (config->getGPSHDOPThrs() / 10.0)) {
+        homeBestHDOP = gps->hdop.hdop();
         hasSetHome = true;
         homeAlt = gps->altitude.meters();
         ESP_LOGI(TAG, "Setting Home Position, Altitude=%d", (int)homeAlt);
@@ -129,6 +130,21 @@ void Beacon::handleData() {
       } else {
         // Looking for better precision to set home, blink twice
         led->blinkTwice();
+      }
+    } else {
+      if (!hasTakenOff) {
+        if (gps->speed.kmph() > 10.0) {
+          ESP_LOGI(TAG, "Take off");
+          hasTakenOff = true;
+        } else {
+          double hdop = gps->hdop.hdop();
+          if (hdop < homeBestHDOP) {
+            homeAlt = gps->altitude.meters();
+            ESP_LOGI(TAG, "Improving Home Position while not moving, Altitude=%d", (int)homeAlt);
+            droneID->set_home_position(gps->location.lat(), gps->location.lng(), gps->altitude.meters());
+            homeBestHDOP = hdop;
+          }
+        }
       }
     }
     droneID->set_current_position(gps->location.lat(), gps->location.lng(), gps->altitude.meters());

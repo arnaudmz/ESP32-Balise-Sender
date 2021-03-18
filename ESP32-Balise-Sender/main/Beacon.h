@@ -13,6 +13,7 @@ class Beacon {
     Beacon(Config *c, LED *l, Switches *s, droneIDFR *d, TinyGPSPlus *g);
     void handleData();
     bool hasSetHomeYet() { return hasSetHome; }
+    bool hasTakenOffYet() { return hasTakenOff; }
 
   private:
     void sendBeacon(const uint8_t *packet, const uint8_t to_send);
@@ -26,6 +27,8 @@ class Beacon {
     TinyGPSPlus *gps;
     uint8_t headerSize;
     bool hasSetHome = false;
+    double homeBestHDOP = 99.9;
+    bool hasTakenOff = false;
     double homeAlt = 0.0;
     uint64_t beaconSec = 0;
     uint64_t gpsSec = 0;

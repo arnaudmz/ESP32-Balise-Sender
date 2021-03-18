@@ -5,7 +5,6 @@
 #include "freertos/event_groups.h"
 #include <string.h>
 #include "esp_system.h"
-#include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_bt.h"
 
@@ -41,6 +40,10 @@ enum {
   IDX_BUILD_VERSION_VAL,
   IDX_GPS_MODEL,
   IDX_GPS_MODEL_VAL,
+  IDX_GPS_SAT_THRS,
+  IDX_GPS_SAT_THRS_VAL,
+  IDX_GPS_HDOP_THRS,
+  IDX_GPS_HDOP_THRS_VAL,
   IDX_BUILDER,
   IDX_BUILDER_VAL,
   IDX_VERSION,
@@ -137,6 +140,8 @@ static struct gatts_profile_inst profile_tab[PROFILE_NUM] = {
 static const uint16_t GATTS_SERVICE_UUID            = 0x414D;
 static const uint16_t GATTS_CHAR_UUID_BUILD_VERSION = 0x0001;
 static const uint16_t GATTS_CHAR_UUID_GPS_MODEL     = 0x1234;
+static const uint16_t GATTS_CHAR_UUID_GPS_SAT_THRS  = 0x0007;
+static const uint16_t GATTS_CHAR_UUID_GPS_HDOP_THRS = 0x0025;
 static const uint16_t GATTS_CHAR_UUID_BUILDER       = 0x0BBB;
 static const uint16_t GATTS_CHAR_UUID_VERSION       = 0x0111;
 static const uint16_t GATTS_CHAR_UUID_PREFIX        = 0x1002;
@@ -147,6 +152,8 @@ static const uint16_t character_declaration_uuid   = ESP_GATT_UUID_CHAR_DECLARE;
 static const uint8_t char_prop_read_only   = ESP_GATT_CHAR_PROP_BIT_READ;
 static const uint8_t char_prop_read_write   = ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_READ;
 static uint8_t gps_model;
+static uint8_t gps_sat_thrs;
+static uint8_t gps_hdop_thrs;
 static uint8_t app_version[32];
 static uint8_t builder[3];
 static uint8_t version[3];
@@ -175,6 +182,22 @@ static const esp_gatts_attr_db_t gatt_db[HRS_IDX_NB] = {
   [IDX_GPS_MODEL_VAL]  =
   {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&GATTS_CHAR_UUID_GPS_MODEL, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
                           sizeof(gps_model), sizeof(gps_model), (uint8_t *)&gps_model}},
+  /* Characteristic Declaration */
+  [IDX_GPS_SAT_THRS]      =
+  {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
+                          CHAR_DECLARATION_SIZE, CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write}},
+  /* Characteristic Value */
+  [IDX_GPS_SAT_THRS_VAL]  =
+  {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&GATTS_CHAR_UUID_GPS_SAT_THRS, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+                          sizeof(gps_sat_thrs), sizeof(gps_sat_thrs), (uint8_t *)&gps_sat_thrs}},
+  /* Characteristic Declaration */
+  [IDX_GPS_HDOP_THRS]      =
+  {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
+                          CHAR_DECLARATION_SIZE, CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write}},
+  /* Characteristic Value */
+  [IDX_GPS_HDOP_THRS_VAL]  =
+  {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&GATTS_CHAR_UUID_GPS_HDOP_THRS, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+                          sizeof(gps_hdop_thrs), sizeof(gps_hdop_thrs), (uint8_t *)&gps_hdop_thrs}},
   /* Characteristic Declaration */
   [IDX_BUILDER]      =
   {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
@@ -318,6 +341,24 @@ void handle_write(uint16_t handle, uint8_t *value, uint16_t len) {
         ESP_LOGD(TAG, "Model written");
       my_config->setGPSModel((GPSModel) *value);
     }
+  } else if (handle == handle_table[IDX_GPS_SAT_THRS_VAL]) {
+    if(*value > 16) {
+      ESP_LOGD(TAG, "Reset Sat thrs to factory setting");
+      my_config->resetGPSSatThrs();
+    } else {
+        ESP_LOGD(TAG, "Sat Thrs written");
+      my_config->setGPSSatThrs(*value);
+    }
+  } else if (handle == handle_table[IDX_GPS_HDOP_THRS_VAL]) {
+    if(*value > 100 || *value < 10) {
+      ESP_LOGD(TAG, "Reset HDOP thrs to factory setting");
+      my_config->resetGPSHDOPThrs();
+    } else {
+        ESP_LOGD(TAG, "HDOP Thrs written");
+      my_config->setGPSHDOPThrs(*value);
+    }
+  } else {
+      ESP_LOGD(TAG, "Unkown handle: %d", handle);
   }
 }
 
@@ -417,6 +458,8 @@ void ble_serve(Config *config, LED *led) {
   memcpy(suffix, config->getSuffix(), 12);
   memcpy(app_version, _app_version, strlen(_app_version));
   gps_model = config->getGPSModel();
+  gps_sat_thrs = config->getGPSSatThrs();
+  gps_hdop_thrs = config->getGPSHDOPThrs();
   const char *pref = config->getPrefix();
   if (*pref != '\0') {
     memcpy(prefix, config->getPrefix(), 4);
