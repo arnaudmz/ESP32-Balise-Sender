@@ -28,8 +28,8 @@ static constexpr char NVS_HANDLE_NAME[]        = "beacon";
 
 Config::Config():
 model(GPS_MODEL_L80R),
-GPSSatThrs(6),
-GPSHDOPThrs(25),
+GPSSatThrs(4),
+GPSHDOPThrs(40),
 switchesEnabled(true),
 hardcodedSuffixEnabled(false),
 idBuilder(CONFIG_BEACON_ID_BUILDER),
