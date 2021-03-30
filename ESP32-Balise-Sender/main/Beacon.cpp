@@ -148,7 +148,12 @@ void Beacon::handleData() {
       }
     }
     droneID->set_current_position(gps->location.lat(), gps->location.lng(), gps->altitude.meters());
-    droneID->set_heading(gps->course.deg());
+    double course_deg = gps->course.deg();
+    if(course_deg > 0.0 && course_deg < 360.0) {
+      droneID->set_heading((uint16_t) course_deg);
+    } else {
+      droneID->set_heading(0);
+    }
     droneID->set_ground_speed(gps->speed.mps());
     droneID->set_heigth(gps->altitude.meters() - homeAlt);
     ESP_LOGI(TAG, "%d:%02d:%02dZ: lng=%.4f, lat=%.4f, satt=%d, hdop=%.2f",
