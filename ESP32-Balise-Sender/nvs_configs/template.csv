@@ -2,8 +2,8 @@ beacon,namespace,
 name,data,string
 version,data,u8,REPEAT
 gps_model,data,u8
-gps_satt_thrs,data,u8
-gps_hdop_thrs,data,u8
+gps_sat_thrs,data,u8,REPEAT
+gps_hdop_thrs,data,u8,REPEAT
 ovr_builder,data,string
 ovr_version,data,string
 ovr_prefix,data,string

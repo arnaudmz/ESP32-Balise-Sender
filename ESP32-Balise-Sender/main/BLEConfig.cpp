@@ -155,10 +155,10 @@ static uint8_t gps_model;
 static uint8_t gps_sat_thrs;
 static uint8_t gps_hdop_thrs;
 static uint8_t app_version[32];
-static uint8_t builder[3];
-static uint8_t version[3];
-static uint8_t prefix[4] = {'\0', '\0', '\0', '\0'};
-static uint8_t suffix[12];
+static uint8_t builder[Config::BUILDER_LENGTH];
+static uint8_t version[Config::VERSION_LENGTH];
+static uint8_t prefix[Config::PREFIX_LENGTH] = {'\0', '\0', '\0', '\0'};
+static uint8_t suffix[Config::SUFFIX_LENGTH];
 
 /* Full Database Description - Used to add attributes into the database */
 static const esp_gatts_attr_db_t gatt_db[HRS_IDX_NB] = {
@@ -453,9 +453,9 @@ void ble_serve(Config *config, LED *led) {
   my_config = config;
   const char *_app_version = config->getAppVersion();
   led->blinkFastForever();
-  memcpy(builder, config->getBuilder(), 3);
-  memcpy(version, config->getVersion(), 3);
-  memcpy(suffix, config->getSuffix(), 12);
+  memcpy(builder, config->getBuilder(), Config::BUILDER_LENGTH);
+  memcpy(version, config->getVersion(), Config::VERSION_LENGTH);
+  memcpy(suffix, config->getSuffix(), Config::SUFFIX_LENGTH);
   memcpy(app_version, _app_version, strlen(_app_version));
   gps_model = config->getGPSModel();
   gps_sat_thrs = config->getGPSSatThrs();

@@ -22,7 +22,7 @@ static constexpr char VERSION_NVS_NAME[]       = "ovr_version";
 static constexpr char PREFIX_NVS_NAME[]        = "ovr_prefix";
 static constexpr char SUFFIX_NVS_NAME[]        = "ovr_suffix";
 static constexpr char GPS_MODEL_NVS_NAME[]     = "gps_model";
-static constexpr char GPS_SAT_THRS_NVS_NAME[] = "gps_satt_thrs";
+static constexpr char GPS_SAT_THRS_NVS_NAME[]  = "gps_sat_thrs";
 static constexpr char GPS_HDOP_THRS_NVS_NAME[] = "gps_hdop_thrs";
 static constexpr char NVS_HANDLE_NAME[]        = "beacon";
 

@@ -8,12 +8,21 @@
 #include "droneID_FR.h"
 #include "TinyGPS++.h"
 
+enum BeaconState {
+  NO_GPS = 0,
+  GPS_NOT_PRECISE,
+  HAS_HOME,
+  IN_FLIGHT
+};
+
 class Beacon {
   public:
     Beacon(Config *c, LED *l, Switches *s, droneIDFR *d, TinyGPSPlus *g);
+    BeaconState getState();
     void handleData();
     bool hasSetHomeYet() { return hasSetHome; }
     bool hasTakenOffYet() { return hasTakenOff; }
+    uint16_t getLastPrefix();
 
   private:
     void sendBeacon(const uint8_t *packet, const uint8_t to_send);
@@ -32,5 +41,6 @@ class Beacon {
     double homeAlt = 0.0;
     uint64_t beaconSec = 0;
     uint64_t gpsSec = 0;
+    uint16_t lastPrefix = 0;
 };
 #endif //ifndef __Beacon_h

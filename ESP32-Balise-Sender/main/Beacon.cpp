@@ -73,18 +73,28 @@ void Beacon::sendBeacon(const uint8_t *packet, const uint8_t to_send) {
 
 void Beacon::computeID() {
   if (switches->enabled()) {
+    int gMSB = switches->getGroupMSBState();
+    int gLSB = switches->getGroupLSBState();
+    int mMSB = switches->getMassMSBState();
+    int mLSB = switches->getMassLSBState();
     snprintf(droneIDStr, 33, "%3s%3s00000000%1d%03d%12s",
       config->getBuilder(),
       config->getVersion(),
-      model_id_to_value[(switches->getGroupMSBState() << 1) + switches->getGroupLSBState()],
-      mass_id_to_value[(switches->getMassMSBState() << 1) + switches->getMassLSBState()],
+      model_id_to_value[(gMSB << 1) + gLSB],
+      mass_id_to_value[(mMSB << 1) + mLSB],
       config->getSuffix());
+    lastPrefix = model_id_to_value[(gMSB << 1) + gLSB] * 1000 + mass_id_to_value[(mMSB << 1) + mLSB];
   } else {
+    const char *pref_str = config->getPrefix();
     snprintf(droneIDStr, 33, "%3s%3s00000000%4s%12s",
       config->getBuilder(),
       config->getVersion(),
-      config->getPrefix(),
+      pref_str,
       config->getSuffix());
+    lastPrefix = (pref_str[0] - '0') * 1000 +
+               (pref_str[1] - '0') * 100 +
+               (pref_str[2] - '0') * 10 +
+               (pref_str[3] - '0');
   }
   ESP_LOGD(TAG, "Computed ID: %s", droneIDStr);
 }
@@ -109,18 +119,33 @@ void Beacon::computeAndSendBeaconIfNeeded() {
   }
 }
 
-void Beacon::handleData() {
+BeaconState Beacon::getState() {
   if (!gps->location.isValid()) {
-    ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %.2lf, time: %02d:%02d:%02d",
-        gpsSec++,
-        gps->satellites.value(),
-        gps->hdop.hdop(),
-        gps->time.hour(),
-        gps->time.minute(),
-        gps->time.second());
-    led->blinkOnce();
-  } else {
-    if (!hasSetHome) {
+    return NO_GPS;
+  }
+  if (!hasSetHome) {
+    return GPS_NOT_PRECISE;
+  }
+  if (!hasTakenOff) {
+    return HAS_HOME;
+  }
+  return IN_FLIGHT;
+}
+
+void Beacon::handleData() {
+  switch (getState()) {
+    case NO_GPS:
+      ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %.2lf, time: %02d:%02d:%02d",
+          gpsSec++,
+          gps->satellites.value(),
+          gps->hdop.hdop(),
+          gps->time.hour(),
+          gps->time.minute(),
+          gps->time.second());
+      led->blinkOnce();
+      computeID(); // only needed for SPort Telemetry value to be correct ASAP
+      return;
+    case GPS_NOT_PRECISE:
       if (gps->satellites.value() >= config->getGPSSatThrs() && gps->hdop.hdop() <= (config->getGPSHDOPThrs() / 10.0)) {
         homeBestHDOP = gps->hdop.hdop();
         hasSetHome = true;
@@ -131,40 +156,45 @@ void Beacon::handleData() {
         // Looking for better precision to set home, blink twice
         led->blinkTwice();
       }
-    } else {
-      if (!hasTakenOff) {
-        if (gps->speed.kmph() > 10.0) {
-          ESP_LOGI(TAG, "Take off");
-          hasTakenOff = true;
-        } else {
-          double hdop = gps->hdop.hdop();
-          if (hdop < homeBestHDOP) {
-            homeAlt = gps->altitude.meters();
-            ESP_LOGI(TAG, "Improving Home Position while not moving, Altitude=%d", (int)homeAlt);
-            droneID->set_home_position(gps->location.lat(), gps->location.lng(), gps->altitude.meters());
-            homeBestHDOP = hdop;
-          }
+      computeID(); // only needed for SPort Telemetry value to be correct ASAP
+      break;
+    case HAS_HOME:
+      if (gps->speed.kmph() > 10.0) {
+        ESP_LOGI(TAG, "Take off");
+        hasTakenOff = true;
+      } else {
+        double hdop = gps->hdop.hdop();
+        if (hdop < homeBestHDOP) {
+          homeAlt = gps->altitude.meters();
+          ESP_LOGI(TAG, "Improving Home Position while not moving, Altitude=%d", (int)homeAlt);
+          droneID->set_home_position(gps->location.lat(), gps->location.lng(), gps->altitude.meters());
+          homeBestHDOP = hdop;
         }
       }
-    }
-    droneID->set_current_position(gps->location.lat(), gps->location.lng(), gps->altitude.meters());
-    double course_deg = gps->course.deg();
-    if(course_deg > 0.0 && course_deg < 360.0) {
-      droneID->set_heading((uint16_t) course_deg);
-    } else {
-      droneID->set_heading(0);
-    }
-    droneID->set_ground_speed(gps->speed.mps());
-    droneID->set_heigth(gps->altitude.meters() - homeAlt);
-    ESP_LOGI(TAG, "%d:%02d:%02dZ: lng=%.4f, lat=%.4f, satt=%d, hdop=%.2f",
-      gps->time.hour(),
-      gps->time.minute(),
-      gps->time.second(),
-      gps->location.lng(),
-      gps->location.lat(),
-      gps->satellites.value(),
-      gps->hdop.hdop());
-    computeAndSendBeaconIfNeeded();
+      break;
+    default:
+      break;
   }
+  droneID->set_current_position(gps->location.lat(), gps->location.lng(), gps->altitude.meters());
+  double course_deg = gps->course.deg();
+  if(course_deg > 0.0 && course_deg < 360.0) {
+    droneID->set_heading((uint16_t) course_deg);
+  } else {
+    droneID->set_heading(0);
+  }
+  droneID->set_ground_speed(gps->speed.mps());
+  droneID->set_heigth(gps->altitude.meters() - homeAlt);
+  ESP_LOGI(TAG, "%d:%02d:%02dZ: lng=%.4f, lat=%.4f, satt=%d, hdop=%.2f",
+    gps->time.hour(),
+    gps->time.minute(),
+    gps->time.second(),
+    gps->location.lng(),
+    gps->location.lat(),
+    gps->satellites.value(),
+    gps->hdop.hdop());
+  computeAndSendBeaconIfNeeded();
 }
 
+uint16_t Beacon::getLastPrefix() {
+  return lastPrefix;
+}
