@@ -8,3 +8,4 @@ ovr_builder,data,string
 ovr_version,data,string
 ovr_prefix,data,string
 ovr_suffix,data,string
+telemetry,data,string

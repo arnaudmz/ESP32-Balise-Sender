@@ -24,6 +24,7 @@ static constexpr char SUFFIX_NVS_NAME[]        = "ovr_suffix";
 static constexpr char GPS_MODEL_NVS_NAME[]     = "gps_model";
 static constexpr char GPS_SAT_THRS_NVS_NAME[]  = "gps_sat_thrs";
 static constexpr char GPS_HDOP_THRS_NVS_NAME[] = "gps_hdop_thrs";
+static constexpr char TELEMETRY_NVS_NAME[]     = "telemetry";
 static constexpr char NVS_HANDLE_NAME[]        = "beacon";
 
 Config::Config():
@@ -35,7 +36,8 @@ hardcodedSuffixEnabled(false),
 idBuilder(CONFIG_BEACON_ID_BUILDER),
 idVersion(CONFIG_BEACON_ID_VERSION),
 idPrefix(""),
-idSuffix("") {
+idSuffix(""),
+telemetry("") {
   nvs_flash_init();
   ESP_ERROR_CHECK( esp_read_mac(macAddr, ESP_MAC_WIFI_STA) );
   nvs_handle_t my_nvs_handle;
@@ -47,6 +49,7 @@ idSuffix("") {
   } else {
     getFixedStr(my_nvs_handle, BUILDER_NVS_NAME, idBuilder, sizeof(idBuilder));
     getFixedStr(my_nvs_handle, VERSION_NVS_NAME, idVersion, sizeof(idVersion));
+    getFixedStr(my_nvs_handle, TELEMETRY_NVS_NAME, telemetry, sizeof(telemetry));
     switchesEnabled = (getFixedStr(my_nvs_handle, PREFIX_NVS_NAME, idPrefix, sizeof(idPrefix)) != ESP_OK);
     hardcodedSuffixEnabled = (getFixedStr(my_nvs_handle, SUFFIX_NVS_NAME, idSuffix, sizeof(idSuffix)) == ESP_OK);
     getU8(my_nvs_handle, GPS_MODEL_NVS_NAME, (uint8_t *)&model);
@@ -153,6 +156,17 @@ gpio_num_t Config::getPPSPort() {
   return (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO;
 }
 
+const char *Config::getTelemetryModeStr() {
+  return telemetry;
+}
+
+TelemetryMode Config::getTelemetryMode() {
+  if (strcmp(telemetry, "FRSP") == 0) {
+    return TELEMETRY_FRSP;
+  }
+  return TELEMETRY_OFF;
+}
+
 void Config::printConfig() {
   const esp_app_desc_t *app = esp_ota_get_app_description();
   ESP_LOGI(TAG, "Starting Beacon (%s) version %s", app->project_name, app->version);
@@ -188,6 +202,14 @@ void Config::printConfig() {
   } else {
     ESP_LOGI(TAG, "Swiches are disabled, %s is hardcoded as prefix", idPrefix);
   }
+  switch (getTelemetryMode()) {
+    case TELEMETRY_OFF:
+      ESP_LOGI(TAG, "Telemetry (%s): OFF", telemetry);
+      break;
+    case TELEMETRY_FRSP:
+      ESP_LOGI(TAG, "Telemetry (%s): FrSky SPort", telemetry);
+      break;
+  }
 }
 
 const uint8_t *Config::getMACAddr() {
@@ -222,6 +244,10 @@ esp_err_t Config::setGPSHDOPThrs(uint8_t value) {
   return setU8Value(GPS_HDOP_THRS_NVS_NAME, value);
 }
 
+esp_err_t Config::setTelemetryMode(const uint8_t *newTelemetryMode) {
+  return setStrValue(TELEMETRY_NVS_NAME, (const char *)newTelemetryMode, TELEMETRY_LENGTH);
+}
+
 esp_err_t Config::resetBuilder() {
   return resetValue(BUILDER_NVS_NAME);
 }
@@ -248,6 +274,10 @@ esp_err_t Config::resetGPSSatThrs() {
 
 esp_err_t Config::resetGPSHDOPThrs() {
   return resetValue(GPS_HDOP_THRS_NVS_NAME);
+}
+
+esp_err_t Config::resetTelemetryMode() {
+  return resetValue(TELEMETRY_NVS_NAME);
 }
 
 esp_err_t Config::resetValue(const char *name) {

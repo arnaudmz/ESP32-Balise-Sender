@@ -52,6 +52,8 @@ enum {
   IDX_PREFIX_VAL,
   IDX_SUFFIX,
   IDX_SUFFIX_VAL,
+  IDX_TELEMETRY,
+  IDX_TELEMETRY_VAL,
   HRS_IDX_NB,
 };
 
@@ -146,6 +148,7 @@ static const uint16_t GATTS_CHAR_UUID_BUILDER       = 0x0BBB;
 static const uint16_t GATTS_CHAR_UUID_VERSION       = 0x0111;
 static const uint16_t GATTS_CHAR_UUID_PREFIX        = 0x1002;
 static const uint16_t GATTS_CHAR_UUID_SUFFIX        = 0xFFFF;
+static const uint16_t GATTS_CHAR_UUID_TELEMETRY     = 0x0033;
 
 static const uint16_t primary_service_uuid         = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t character_declaration_uuid   = ESP_GATT_UUID_CHAR_DECLARE;
@@ -159,6 +162,7 @@ static uint8_t builder[Config::BUILDER_LENGTH];
 static uint8_t version[Config::VERSION_LENGTH];
 static uint8_t prefix[Config::PREFIX_LENGTH] = {'\0', '\0', '\0', '\0'};
 static uint8_t suffix[Config::SUFFIX_LENGTH];
+static uint8_t telemetry[Config::TELEMETRY_LENGTH];
 
 /* Full Database Description - Used to add attributes into the database */
 static const esp_gatts_attr_db_t gatt_db[HRS_IDX_NB] = {
@@ -230,6 +234,14 @@ static const esp_gatts_attr_db_t gatt_db[HRS_IDX_NB] = {
   [IDX_SUFFIX_VAL]  =
   {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&GATTS_CHAR_UUID_SUFFIX, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
                           sizeof(suffix), sizeof(suffix), (uint8_t *)suffix}},
+  /* Characteristic Declaration */
+  [IDX_TELEMETRY]      =
+  {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&character_declaration_uuid, ESP_GATT_PERM_READ,
+                          CHAR_DECLARATION_SIZE, CHAR_DECLARATION_SIZE, (uint8_t *)&char_prop_read_write}},
+  /* Characteristic Value */
+  [IDX_TELEMETRY_VAL]  =
+  {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&GATTS_CHAR_UUID_TELEMETRY, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
+                          sizeof(telemetry), sizeof(telemetry), (uint8_t *)telemetry}},
 };
 
 static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
@@ -331,6 +343,18 @@ void handle_write(uint16_t handle, uint8_t *value, uint16_t len) {
         my_config->setSuffix(value);
       } else {
         ESP_LOGD(TAG, "Suffix not updated, contains invalid chars");
+      }
+    }
+  } else if (handle == handle_table[IDX_TELEMETRY_VAL]) {
+    if (len != Config::TELEMETRY_LENGTH) {
+      ESP_LOGD(TAG, "Reset Telemetry Mode to factory setting");
+      my_config->resetTelemetryMode();
+    } else {
+      if (check_data_are_chars(value, len)) {
+        ESP_LOGD(TAG, "Telemetry Mode written");
+        my_config->setTelemetryMode(value);
+      } else {
+        ESP_LOGD(TAG, "Telemetry mode not updated, contains invalid chars");
       }
     }
   } else if (handle == handle_table[IDX_GPS_MODEL_VAL]) {
@@ -456,6 +480,7 @@ void ble_serve(Config *config, LED *led) {
   memcpy(builder, config->getBuilder(), Config::BUILDER_LENGTH);
   memcpy(version, config->getVersion(), Config::VERSION_LENGTH);
   memcpy(suffix, config->getSuffix(), Config::SUFFIX_LENGTH);
+  memcpy(telemetry, config->getTelemetryModeStr(), Config::TELEMETRY_LENGTH);
   memcpy(app_version, _app_version, strlen(_app_version));
   gps_model = config->getGPSModel();
   gps_sat_thrs = config->getGPSSatThrs();

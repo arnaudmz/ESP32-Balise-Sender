@@ -8,6 +8,7 @@
 #include "GPSCnx.h"
 #include "LED.h"
 #include "Beacon.h"
+#include "SPort.h"
 #include "droneID_FR.h"
 
 //#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
@@ -26,13 +27,16 @@ void low_power(GPSCnx *cnx, uint32_t delay_ms = 0) {
   ESP_LOGV(TAG, "%ld Wakeup", millis());
 }
 
-void loop(Config *config, GPSCnx * cnx, Beacon *beacon) {
+void loop(Config *config, GPSCnx * cnx, Beacon *beacon, SPort *sport) {
   uint32_t first_char_ts, startup_ts = millis();
   uint32_t sleep_duration = 990;
   ESP_LOGV(TAG, "%d Main loop", startup_ts);
   first_char_ts = cnx->waitForChars();
   ESP_LOGD(TAG, "Spent %ldms to read, wasted %d ms", millis() - startup_ts, first_char_ts - startup_ts);
   beacon->handleData();
+  if (config->getTelemetryMode() == TELEMETRY_FRSP && sport != NULL) {
+    sport->readChars();
+  }
   switch (config->getGPSModel()) {
     case GPS_MODEL_BN_220:
     case GPS_MODEL_MOCK:
@@ -77,8 +81,12 @@ void normal_run(void) {
     default:
       cnx = NULL;
   }
+  SPort *sport = NULL;
+  if (config.getTelemetryMode() == TELEMETRY_FRSP) {
+    sport = new SPort(&config, &gps, &beacon);
+  }
   while(true) {
-    loop(&config, cnx, &beacon);
+    loop(&config, cnx, &beacon, sport);
   }
 }
 
