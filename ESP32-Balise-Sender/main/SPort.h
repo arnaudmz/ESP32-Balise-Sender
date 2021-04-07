@@ -58,13 +58,15 @@ class SPort {
     Beacon *beacon;
     const uart_port_t uartPort = UART_NUM_1;
     uint8_t rxBuffer[RX_BUF_SIZE];
-    //SPortMetricType metricIndex = 0;
+    SPortMetricType metricIndex = SPORT_METRIC_ALT;
     void sendResponse(const char msg[]);
     void sendChar(char c);
     void sendEncodedChar(char c);
     char cksum(const char data[], int start, int len);
 //    SPortMetric *getNextMetric();
     bool waitForSPort();
+    void lookForCommand();
+    void parseCommand(const char *msg, int len);
     //void generateMetricFrame(SPortMetric *metric) {
 };
 #endif //ifndef __SPort_h

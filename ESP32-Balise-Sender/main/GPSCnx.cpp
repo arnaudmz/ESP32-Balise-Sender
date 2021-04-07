@@ -38,8 +38,9 @@ void GPSCnx::injectIfNeeded(uint32_t nb_chars, bool inject) {
 }
 
 void GPSCnx::lowPower(uint32_t delay_ms) {
-  esp_sleep_enable_timer_wakeup(delay_ms * uS_TO_mS_FACTOR);
-  esp_light_sleep_start();
+  //esp_sleep_enable_timer_wakeup(delay_ms * uS_TO_mS_FACTOR);
+  //esp_light_sleep_start();
+  vTaskDelay(pdMS_TO_TICKS(delay_ms));
 }
 
 uint32_t GPSUARTCnx::waitForChars(int first_timeout_ms, int next_timeout_ms, bool inject) {

@@ -23,11 +23,11 @@ class Beacon {
     bool hasSetHomeYet() { return hasSetHome; }
     bool hasTakenOffYet() { return hasTakenOff; }
     uint16_t getLastPrefix();
+    void computeID();
 
   private:
     void sendBeacon(const uint8_t *packet, const uint8_t to_send);
     void computeAndSendBeaconIfNeeded();
-    void computeID();
     char droneIDStr[33];
     Config *config;
     LED *led;

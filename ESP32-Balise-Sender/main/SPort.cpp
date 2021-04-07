@@ -13,10 +13,8 @@ static constexpr char TAG[] = "SPort";
 #include "esp_log.h"
 
 #define SPORT_BAUD_RATE 57600
-//#define PPS_IO       (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO
 #define RX_IO 5
 #define TX_IO 18
-//#define SPORT_GPS_ID 0x4
 #define SPORT_GPS_ID 0x12
 
 
@@ -157,13 +155,49 @@ void SPortMetric::getFrame(char *frame, TinyGPSPlus* gps, Beacon *beacon) {
   frame[6] = value >> 24 & 0xff;
 }
 
-//SPortMetric *SPort::getNextMetric() {
-//  return &metrics[7];
-//}
+void SPort::parseCommand(const char *msg, int len) {
+  ESP_LOGV(TAG, "Potential command:");
+  ESP_LOG_BUFFER_HEXDUMP(TAG, msg, len, ESP_LOG_INFO);
+  char cks = cksum(msg, 0, len - 1);
+  if (cks != msg[len-1]) {
+    ESP_LOGV(TAG, "CheckSum invalid");
+    return;
+  }
+  ESP_LOGV(TAG, "CheckSum valid");
+  if (msg[1] == 0xff && msg[2] == 0x00) {
+    uint32_t bin_pref = msg[3] + (msg[4] << 8) + (msg[5] << 16) + (msg[6] << 24);
+    uint8_t new_prefix[4];
+    new_prefix[0] = '0' + bin_pref / 1000;
+    uint32_t left_part = bin_pref % 1000;
+    new_prefix[1] = '0' + left_part / 100;
+    left_part %= 100;
+    new_prefix[2] = '0' + left_part / 10;
+    left_part %= 10;
+    new_prefix[3] = '0' + left_part;
+    ESP_LOGD(TAG, "New Prefix: %d=%c%c%c%c", bin_pref, new_prefix[0], new_prefix[1], new_prefix[2], new_prefix[3]);
+    esp_err_t err = config->setPrefix(new_prefix);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "Can't change prefix: %s", esp_err_to_name(err));
+    }
+    beacon->computeID();
+  }
+}
+
+void SPort::lookForCommand() {
+  // reading pending / lost stuff
+  int nb_chars = uart_read_bytes(uartPort, rxBuffer, RX_BUF_SIZE, pdMS_TO_TICKS(1));
+  for (int i = 0; i < nb_chars - 10; i++) {
+    if (rxBuffer[i] == 0x7e &&
+        (rxBuffer[i+1] & 0x1f) == SPORT_GPS_ID &&
+        rxBuffer[i+2] == 0x31) {
+          parseCommand((const char*) &rxBuffer[i+2], 8);
+    }
+  }
+}
 
 bool SPort::waitForSPort() {
+  lookForCommand();
   for (int i=0; i< 28; i++) {
-    ESP_ERROR_CHECK( uart_flush_input(uartPort) );
     int nb_chars = uart_read_bytes(uartPort, rxBuffer, 1, pdMS_TO_TICKS(13));
     if (nb_chars == 1) {
       nb_chars += uart_read_bytes(uartPort, &rxBuffer[1], 16, pdMS_TO_TICKS(1));
@@ -176,13 +210,13 @@ bool SPort::waitForSPort() {
       return false;
     }
   }
+  ESP_LOGI(TAG, "Failed to get SPort command for ME, timeout");
   return false;
 }
 
 void SPort::readChars() {
-  ESP_LOGD(TAG, "ReadChars...");
+  ESP_LOGV(TAG, "ReadChars...");
   char response[7];
-  //char too_soon[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
   for (int i=0; i < SPORT_METRIC_LAST; i++) {
     if (waitForSPort()) {
       SPortMetric *metric = &metrics[i];

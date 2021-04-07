@@ -96,6 +96,7 @@ void Beacon::computeID() {
                (pref_str[2] - '0') * 10 +
                (pref_str[3] - '0');
   }
+  droneID->set_drone_id(droneIDStr);
   ESP_LOGD(TAG, "Computed ID: %s", droneIDStr);
 }
 
@@ -111,7 +112,6 @@ void Beacon::computeAndSendBeaconIfNeeded() {
         droneID->get_ground_speed_kmh());
     if (switches->enabled()) {
       computeID();
-      droneID->set_drone_id(droneIDStr);
     }
     const uint8_t to_send = droneID->generate_beacon_frame(beaconPacket, headerSize);
     sendBeacon(beaconPacket, to_send);
