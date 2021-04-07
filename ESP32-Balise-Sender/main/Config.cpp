@@ -220,16 +220,20 @@ esp_err_t Config::setBuilder(const uint8_t *newBuilder) {
   return setStrValue(BUILDER_NVS_NAME, (const char *)newBuilder, BUILDER_LENGTH);
 }
 
-esp_err_t Config::setVersion(const uint8_t *newBuilder) {
-  return setStrValue(VERSION_NVS_NAME, (const char *)newBuilder, VERSION_LENGTH);
+esp_err_t Config::setVersion(const uint8_t *newVersion) {
+  return setStrValue(VERSION_NVS_NAME, (const char *)newVersion, VERSION_LENGTH);
 }
 
-esp_err_t Config::setPrefix(const uint8_t *newBuilder) {
-  return setStrValue(PREFIX_NVS_NAME, (const char *)newBuilder, PREFIX_LENGTH);
+esp_err_t Config::setPrefix(const uint8_t *newPrefix) {
+  memcpy(idPrefix, newPrefix, PREFIX_LENGTH);
+  idPrefix[PREFIX_LENGTH] = '\0';
+  switchesEnabled = false;
+  printConfig();  
+  return setStrValue(PREFIX_NVS_NAME, (const char *)newPrefix, PREFIX_LENGTH);
 }
 
-esp_err_t Config::setSuffix(const uint8_t *newBuilder) {
-  return setStrValue(SUFFIX_NVS_NAME, (const char *)newBuilder, SUFFIX_LENGTH);
+esp_err_t Config::setSuffix(const uint8_t *newSuffix) {
+  return setStrValue(SUFFIX_NVS_NAME, (const char *)newSuffix, SUFFIX_LENGTH);
 }
 
 esp_err_t Config::setGPSModel(const GPSModel model) {
@@ -310,8 +314,8 @@ esp_err_t Config::setStrValue(const char *name, const char *value, int len) {
   char st[16];
   memcpy(st, value, len);
   st[len] = '\0';
-  ESP_LOGI(TAG, "Setting conf in NVS for %s to %s", name, st);
-  err = nvs_set_str(handle, name, value);
+  ESP_LOGI(TAG, "Setting conf in NVS for %s to %s (%d bytes)", name, st, len);
+  err = nvs_set_str(handle, name, st);
   nvs_close(handle);
   return err;
 }

@@ -25,6 +25,8 @@
   "idf.flashType": "UART",
   "idf.port": "/dev/ttyUSB0",
   "files.associations": {
-    "*.inc": "cpp"
+    "*.inc": "cpp",
+    "*.ipp": "cpp",
+    "*.tcc": "cpp"
   }
 }
