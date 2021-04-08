@@ -8,7 +8,8 @@ enum GPSModel {
   GPS_MODEL_MOCK = 0,
   GPS_MODEL_L80R,
   GPS_MODEL_BN_220,
-  GPS_MODEL_L96_UART
+  GPS_MODEL_L96_UART,
+  GPS_MODEL_AT6558
 };
 
 enum TelemetryMode {

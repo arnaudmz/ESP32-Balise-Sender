@@ -39,6 +39,7 @@ void loop(Config *config, GPSCnx * cnx, Beacon *beacon, SPort *sport) {
   }
   switch (config->getGPSModel()) {
     case GPS_MODEL_BN_220:
+    case GPS_MODEL_AT6558:
     case GPS_MODEL_MOCK:
       if (first_char_ts > 0) {
         sleep_duration -= millis() - first_char_ts;
@@ -77,6 +78,9 @@ void normal_run(void) {
       break;
     case GPS_MODEL_L96_UART:
       cnx = new GPSL96Cnx(&config, &gps);
+      break;
+    case GPS_MODEL_AT6558:
+      cnx = new GPSAT6558Cnx(&config, &gps);
       break;
     default:
       cnx = NULL;

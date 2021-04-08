@@ -50,7 +50,7 @@ uint32_t GPSUARTCnx::waitForChars(int first_timeout_ms, int next_timeout_ms, boo
     return 0;
   }
   first_char_ts = millis();
-  nb_chars += uart_read_bytes(uartPort, &rxBuffer[1], RX_BUF_SIZE, next_timeout_ms / portTICK_RATE_MS);
+  nb_chars += uart_read_bytes(uartPort, &rxBuffer[1], RX_BUF_SIZE - 1, next_timeout_ms / portTICK_RATE_MS);
   injectIfNeeded(nb_chars, inject);
   ESP_LOG_BUFFER_HEXDUMP(TAG, rxBuffer, nb_chars, ESP_LOG_VERBOSE);
   return first_char_ts;
@@ -89,6 +89,33 @@ GPSBN220Cnx::GPSBN220Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, g
   ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
   ESP_ERROR_CHECK( uart_param_config(uartPort, &uart_config) );
   ESP_ERROR_CHECK( uart_set_pin(uartPort, UART_PIN_NO_CHANGE, RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+}
+
+GPSAT6558Cnx::GPSAT6558Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, gps) {
+  const char pcas_enable_all_gns[] = "PCAS04,7";
+  const char pcas_limit_msg[] = "PCAS03,1,0,0,0,1,0,0,0";
+  const char pcas_switch_to_115200[] = "PCAS01,5";
+  const char pcas_save_to_flash[] = "PCAS00";
+  uart_config_t uart_config = {
+    .baud_rate = 9600,
+    .data_bits = UART_DATA_8_BITS,
+    .parity = UART_PARITY_DISABLE,
+    .stop_bits = UART_STOP_BITS_1,
+    .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+    .rx_flow_ctrl_thresh = 0,
+    .source_clk = UART_SCLK_REF_TICK,
+  };
+  // We won't use a buffer for sending data.
+  ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
+  ESP_ERROR_CHECK( uart_param_config(uartPort, &uart_config) );
+  ESP_ERROR_CHECK( uart_set_pin(uartPort, TX_IO, RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+  vTaskDelay(500 / portTICK_PERIOD_MS);
+  uartSendNMEA(pcas_switch_to_115200);
+  vTaskDelay(300 / portTICK_PERIOD_MS);
+  ESP_ERROR_CHECK( uart_set_baudrate(uartPort, 115200) );
+  uartSendNMEA(pcas_limit_msg);
+  uartSendNMEA(pcas_enable_all_gns);
+  uartSendNMEA(pcas_save_to_flash); // not sure it actually works
 }
 
 GPSPPSUARTCnx::GPSPPSUARTCnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, gps) {

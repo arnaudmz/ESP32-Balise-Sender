@@ -190,6 +190,9 @@ void Config::printConfig() {
     case GPS_MODEL_BN_220:
       ESP_LOGI(TAG, "GPS Model: BN-220 (UART)");
       break;
+    case GPS_MODEL_AT6558:
+      ESP_LOGI(TAG, "GPS Model: AT6558 (UART)");
+      break;
   }
   ESP_LOGI(TAG, "Min GPS Sattelites Count Threshold to set home position: %d", getGPSSatThrs());
   ESP_LOGI(TAG, "Max GPS HDOP Threshold to set home position: %d", getGPSHDOPThrs());

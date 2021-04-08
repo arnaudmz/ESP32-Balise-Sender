@@ -58,6 +58,11 @@ class GPSBN220Cnx: public GPSUARTCnx {
     GPSBN220Cnx(Config *config, TinyGPSPlus *gps);
 };
 
+class GPSAT6558Cnx: public GPSUARTCnx {
+  public:
+    GPSAT6558Cnx(Config *config, TinyGPSPlus *gps);
+};
+
 class GPSPPSUARTCnx: public GPSUARTCnx {
   public:
     GPSPPSUARTCnx(Config *config, TinyGPSPlus *gps);
