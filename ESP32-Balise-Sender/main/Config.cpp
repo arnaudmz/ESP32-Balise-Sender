@@ -228,10 +228,13 @@ esp_err_t Config::setVersion(const uint8_t *newVersion) {
 }
 
 esp_err_t Config::setPrefix(const uint8_t *newPrefix) {
+  if (memcmp(idPrefix, newPrefix, PREFIX_LENGTH) == 0) {
+      ESP_LOGI(TAG, "Ignoring new prefix, unchanged");
+      return ESP_OK;
+  }
   memcpy(idPrefix, newPrefix, PREFIX_LENGTH);
   idPrefix[PREFIX_LENGTH] = '\0';
   switchesEnabled = false;
-  printConfig();  
   return setStrValue(PREFIX_NVS_NAME, (const char *)newPrefix, PREFIX_LENGTH);
 }
 

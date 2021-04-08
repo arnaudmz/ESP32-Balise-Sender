@@ -29,31 +29,34 @@ void low_power(GPSCnx *cnx, uint32_t delay_ms = 0) {
 
 void loop(Config *config, GPSCnx * cnx, Beacon *beacon, SPort *sport) {
   uint32_t first_char_ts, startup_ts = millis();
-  uint32_t sleep_duration = 990;
   ESP_LOGV(TAG, "%d Main loop", startup_ts);
   first_char_ts = cnx->waitForChars();
   ESP_LOGD(TAG, "Spent %ldms to read, wasted %d ms", millis() - startup_ts, first_char_ts - startup_ts);
   beacon->handleData();
   if (config->getTelemetryMode() == TELEMETRY_FRSP && sport != NULL) {
-    sport->readChars();
-  }
-  switch (config->getGPSModel()) {
-    case GPS_MODEL_BN_220:
-    case GPS_MODEL_AT6558:
-    case GPS_MODEL_MOCK:
-      if (first_char_ts > 0) {
-        sleep_duration -= millis() - first_char_ts;
-      }
-      if (sleep_duration > 0) {
-        ESP_LOGV(TAG, "%ld Going to sleep for %dms", millis(), sleep_duration);
-        low_power(cnx, sleep_duration);
-      } else {
-        ESP_LOGV(TAG, "%ld Not Going to sleep (%d)ms!", millis(), sleep_duration);
-      }
-      break;
-    default:
-      ESP_LOGV(TAG, "%ld Going to sleep", millis());
-      low_power(cnx);
+    while (millis() - first_char_ts < 950) {
+      sport->readChars();
+    }
+  } else {
+    uint32_t sleep_duration = 990;
+    switch (config->getGPSModel()) {
+      case GPS_MODEL_BN_220:
+      case GPS_MODEL_AT6558:
+      case GPS_MODEL_MOCK:
+        if (first_char_ts > 0) {
+          sleep_duration -= millis() - first_char_ts;
+        }
+        if (sleep_duration > 0) {
+          ESP_LOGV(TAG, "%ld Going to sleep for %dms", millis(), sleep_duration);
+          low_power(cnx, sleep_duration);
+        } else {
+          ESP_LOGV(TAG, "%ld Not Going to sleep (%d)ms!", millis(), sleep_duration);
+        }
+        break;
+      default:
+        ESP_LOGV(TAG, "%ld Going to sleep", millis());
+        low_power(cnx);
+    }
   }
 }
 
