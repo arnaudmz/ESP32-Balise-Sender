@@ -24,6 +24,7 @@ class Beacon {
     bool hasTakenOffYet() { return hasTakenOff; }
     uint16_t getLastPrefix();
     void computeID();
+    uint32_t getSentFramesCount() { return sentFrames; }
 
   private:
     void sendBeacon(const uint8_t *packet, const uint8_t to_send);
@@ -35,6 +36,7 @@ class Beacon {
     droneIDFR *droneID;
     TinyGPSPlus *gps;
     uint8_t headerSize;
+    uint32_t sentFrames = 0;
     bool hasSetHome = false;
     double homeBestHDOP = 99.9;
     bool hasTakenOff = false;

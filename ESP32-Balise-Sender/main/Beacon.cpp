@@ -116,6 +116,7 @@ void Beacon::computeAndSendBeaconIfNeeded() {
     const uint8_t to_send = droneID->generate_beacon_frame(beaconPacket, headerSize);
     sendBeacon(beaconPacket, to_send);
     droneID->set_last_send();
+    sentFrames ++;
   }
 }
 

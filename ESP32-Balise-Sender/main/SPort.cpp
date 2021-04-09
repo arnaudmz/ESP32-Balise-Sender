@@ -27,7 +27,8 @@ SPortMetric gpsMetrics[SPORT_GPS_METRIC_LAST] = {
     SPortMetric(SPORT_BEACON_METRIC_STAT,   SPORT_BEACON_METRIC_STAT_ID,   1000),
     SPortMetric(SPORT_BEACON_METRIC_SAT,    SPORT_BEACON_METRIC_SAT_ID,    1000),
     SPortMetric(SPORT_BEACON_METRIC_HDOP,   SPORT_BEACON_METRIC_HDOP_ID,   1000),
-    SPortMetric(SPORT_BEACON_METRIC_PREFIX, SPORT_BEACON_METRIC_PREFIX_ID, 1000)
+    SPortMetric(SPORT_BEACON_METRIC_PREFIX, SPORT_BEACON_METRIC_PREFIX_ID, 1000),
+    SPortMetric(SPORT_BEACON_METRIC_FRAMES, SPORT_BEACON_METRIC_FRAMES_ID, 5000)
 };
 
 SPort::SPort(Config *c, TinyGPSPlus *gps, Beacon *beacon):
@@ -185,6 +186,9 @@ void SPortMetric::getFrame(char *frame, TinyGPSPlus* gps, Beacon *beacon) {
       break;
     case SPORT_BEACON_METRIC_PREFIX:
       value = beacon->getLastPrefix();
+      break;
+    case SPORT_BEACON_METRIC_FRAMES:
+      value = beacon->getSentFramesCount();
       break;
     default:
       break;
