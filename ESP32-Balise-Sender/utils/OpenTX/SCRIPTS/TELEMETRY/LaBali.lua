@@ -11,6 +11,12 @@ local gpg_alt_id
 local gpg_speed_id
 local gpg_hdg_id
 
+local last_lat
+local last_lon
+local dt
+local got_gps = false
+local got_dt = false
+
 local status_to_desc = {
   [0] = "GPS Fix",
   [1] = "GPS Prec",
@@ -107,18 +113,27 @@ local function run(event)
 
   if gps_gps_id ~= 0 then
     local gpsData = getValue(gps_gps_id)
+    lcd.drawText(1, 37, "Lat", SMLSIZE)
+    lcd.drawText(1, 47, "Lon", SMLSIZE)
     if type(gpsData) == "table" and gpsData.lat ~= nil and gpsData.lon ~= nil then
-      lcd.drawText(1, 37, "Lat", SMLSIZE)
-      lcd.drawText(72, 37, string.format("%.5f", gpsData.lat), SMLSIZE + RIGHT)
-      lcd.drawText(1, 47, "Lon", SMLSIZE)
-      lcd.drawText(72, 47, string.format("%.5f", gpsData.lon), SMLSIZE + RIGHT)
+      last_lat = gpsData.lat
+      last_lon = gpsData.lon
+      got_gps = true
+    end
+    if got_gps then
+      lcd.drawText(72, 37, string.format("%.5f", last_lat), SMLSIZE + RIGHT)
+      lcd.drawText(72, 47, string.format("%.5f", last_lon), SMLSIZE + RIGHT)
     end
   end
   if gps_date_id ~= 0 then
     local dt = getValue(gps_date_id)
     if type(dt) == "table" then
+      last_dt = dt
+      got_dt = true
+    end
+    if got_dt then
       --lcd.drawText(1, 48, string.format("%d-%02d-%02d", dt.year, dt.mon, dt.day), SMLSIZE)
-      lcd.drawText(1, 57, string.format("%02d-%02d %02d:%02d:%02dz", dt.mon, dt.day, dt.hour, dt.min, dt.sec), SMLSIZE)
+      lcd.drawText(1, 57, string.format("%02d-%02d %02d:%02d:%02dz", last_dt.mon, last_dt.day, last_dt.hour, last_dt.min, last_dt.sec), SMLSIZE)
     end
   end
 end
