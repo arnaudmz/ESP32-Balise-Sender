@@ -73,7 +73,7 @@ local function run(event)
   if beacon_pref_id ~= 0 then
     local flags = 0
     local gv7 = model.getGlobalVariable(7, 0)
-    local gv8 = model.getGlobalVariable(7, 0)
+    local gv8 = model.getGlobalVariable(8, 0)
     if getValue(beacon_pref_id) ~= (gv7 * 1000 + gv8) then
       flags = BLINK
     end
