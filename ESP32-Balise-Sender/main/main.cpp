@@ -1,6 +1,7 @@
 // vim:et:sts=2:sw=2:si
 #include "freertos/FreeRTOS.h"
 #include "driver/gpio.h"
+#include "esp_sleep.h"
 
 #include "Config.h"
 #include "Switches.h"
@@ -16,6 +17,8 @@
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 static constexpr char TAG[] = "Main";
 #include "esp_log.h"
+
+#define uS_TO_mS_FACTOR 1000
 
 unsigned long IRAM_ATTR millis() {
   return (unsigned long) (esp_timer_get_time() / 1000ULL);
@@ -34,8 +37,15 @@ void loop(Config *config, GPSCnx * cnx, Beacon *beacon, SPort *sport) {
   ESP_LOGD(TAG, "Spent %ldms to read, wasted %d ms", millis() - startup_ts, first_char_ts - startup_ts);
   beacon->handleData();
   if (config->getTelemetryMode() == TELEMETRY_FRSP && sport != NULL) {
+    uint32_t first_telem_char_ts;
     while (millis() - first_char_ts < 950) {
-      sport->readChars();
+      first_telem_char_ts = sport->readChars();
+      int32_t remaining_ms = 7 - (millis() - first_telem_char_ts);
+      if (remaining_ms > 0) {
+        ESP_LOGD(TAG, "I can sleep for %d ms, before next telem frame", remaining_ms);
+        esp_sleep_enable_timer_wakeup(remaining_ms * uS_TO_mS_FACTOR);
+        esp_light_sleep_start();
+      }
     }
   } else {
     uint32_t sleep_duration = 990;

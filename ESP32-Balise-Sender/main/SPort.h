@@ -57,7 +57,7 @@ class SPortMetric {
 class SPort {
   public:
     SPort(Config *c, TinyGPSPlus *gps, Beacon *beacon);
-    void readChars();
+    uint32_t readChars();
   private:
     Config *config;
     TinyGPSPlus *gps;

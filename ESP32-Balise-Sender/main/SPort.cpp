@@ -243,12 +243,14 @@ uint8_t SPort::findNextMetricToSendIndex() {
   return SPORT_GPS_METRIC_LAST;
 }
 
-void SPort::readChars() {
+uint32_t SPort::readChars() {
   // reading pending / lost stuff
   size_t pending;
+  uint32_t ts = 0;
   ESP_ERROR_CHECK( uart_get_buffered_data_len(uartPort, &pending ));
   int nb_chars = uart_read_bytes(uartPort, rxBuffer, RX_BUF_SIZE, pdMS_TO_TICKS(2));
   if (nb_chars >=2 ) {
+    ts = millis();
     if(nb_chars > 2) {
       ESP_LOGD(TAG, "Read %d bytes (%d pending)", nb_chars, pending);
       ESP_LOG_BUFFER_HEXDUMP(TAG, rxBuffer, nb_chars, ESP_LOG_DEBUG);
@@ -261,13 +263,13 @@ void SPort::readChars() {
       }
     }
     if (rxBuffer[nb_chars - 2] != 0x7e || rxBuffer[nb_chars -1] != SPORT_SENSOR_ID_GPS) {
-      return;
+      return ts;
     }
     uint8_t next = findNextMetricToSendIndex();
     if (next == SPORT_GPS_METRIC_LAST) {
       ESP_LOGV(TAG, "GPS Sensor ID asked (0x%x 0x%x), but too soon for any metric", rxBuffer[nb_chars - 2], rxBuffer[nb_chars - 1]);
       sendTooSoon();
-      return;
+      return ts;
     }
     SPortMetric *metric = &gpsMetrics[next];
     ESP_LOGV(TAG, "GPS Sensor ID asked (0x%x 0x%x), returning %d/%d metric", rxBuffer[nb_chars - 2], rxBuffer[nb_chars - 1], next, SPORT_GPS_METRIC_LAST);
@@ -276,4 +278,5 @@ void SPort::readChars() {
     sendResponse(response);
     lastBeaconMetricIndex = next;
   }
+  return ts;
 }
