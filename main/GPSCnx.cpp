@@ -154,7 +154,7 @@ GPSL80RCnx::GPSL80RCnx(Config *config, TinyGPSPlus *gps): GPSPPSUARTCnx(config, 
   const char pmtk_select_nmea_msg[] = "PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0";
   const char pmtk_switch_baud_rate[] = "PMTK251,115200";
   const char pmtk_enable_pps[] = "PMTK255,1";
-  const char pmtk_config_pps[] = "PMTK285,4,175";
+  const char pmtk_config_pps[] = "PMTK285,4,160";
   uart_config_t uart_config = {
     .baud_rate = 9600,
     .data_bits = UART_DATA_8_BITS,
