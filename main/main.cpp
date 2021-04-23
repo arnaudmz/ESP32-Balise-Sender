@@ -28,6 +28,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "GPSCnx.h"
 #include "LED.h"
 #include "Beacon.h"
+#include "Telemetry.h"
 #include "SPort.h"
 #include "droneID_FR.h"
 
@@ -49,23 +50,14 @@ void low_power(GPSCnx *cnx, uint32_t delay_ms = 0) {
   ESP_LOGV(TAG, "%ld Wakeup", millis());
 }
 
-void loop(Config *config, GPSCnx * cnx, Beacon *beacon, SPort *sport) {
+void loop(Config *config, GPSCnx * cnx, Beacon *beacon, Telemetry *t) {
   uint32_t first_char_ts, startup_ts = millis();
   ESP_LOGV(TAG, "%d Main loop", startup_ts);
   first_char_ts = cnx->waitForChars();
   ESP_LOGD(TAG, "Spent %ldms to read, wasted %d ms", millis() - startup_ts, first_char_ts - startup_ts);
   beacon->handleData();
-  if (config->getTelemetryMode() == TELEMETRY_FRSP && sport != NULL) {
-    uint32_t first_telem_char_ts;
-    while (millis() - first_char_ts < 950) {
-      first_telem_char_ts = sport->readChars();
-      int32_t remaining_ms = 7 - (millis() - first_telem_char_ts);
-      if (remaining_ms > 0) {
-        ESP_LOGD(TAG, "I can sleep for %d ms, before next telem frame", remaining_ms);
-        esp_sleep_enable_timer_wakeup(remaining_ms * uS_TO_mS_FACTOR);
-        esp_light_sleep_start();
-      }
-    }
+  if (config->getTelemetryMode() != TELEMETRY_OFF && t != NULL){
+    t->handle(first_char_ts + 950);
   } else {
     uint32_t sleep_duration = 990;
     switch (config->getGPSModel()) {
@@ -117,12 +109,16 @@ void normal_run(void) {
     default:
       cnx = NULL;
   }
-  SPort *sport = NULL;
-  if (config.getTelemetryMode() == TELEMETRY_FRSP) {
-    sport = new SPort(&config, &gps, &beacon);
+  Telemetry *t = NULL;
+  switch(config.getTelemetryMode()) {
+    case TELEMETRY_FRSP:
+      t = new SPort(&config, &gps, &beacon);
+      break;
+    default:
+      break;
   }
   while(true) {
-    loop(&config, cnx, &beacon, sport);
+    loop(&config, cnx, &beacon, t);
   }
 }
 

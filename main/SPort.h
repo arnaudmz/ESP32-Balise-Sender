@@ -1,4 +1,3 @@
-
 // vim:et:sts=2:sw=2:si
 /*
 ESP32-Balise-Sender, Model / Drone beacon
@@ -26,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "Config.h"
 #include "TinyGPS++.h"
 #include "Beacon.h"
+#include "Telemetry.h"
 
 #define RX_BUF_SIZE 1024
 
@@ -73,10 +73,10 @@ class SPortMetric {
     uint32_t convertDateTime(uint8_t yearOrHour, uint8_t monthOrMinute, uint8_t dayOrSecond, bool isDate);
 };
 
-class SPort {
+class SPort: public Telemetry {
   public:
     SPort(Config *c, TinyGPSPlus *gps, Beacon *beacon);
-    uint32_t readChars();
+    virtual void handle(uint32_t end_ts);
   private:
     Config *config;
     TinyGPSPlus *gps;
@@ -84,6 +84,7 @@ class SPort {
     const uart_port_t uartPort = UART_NUM_1;
     uint8_t rxBuffer[RX_BUF_SIZE];
     uint8_t lastBeaconMetricIndex = SPORT_GPS_METRIC_LAST - 1;
+    uint32_t readChars();
     void sendTooSoon();
     void sendResponse(const char msg[]);
     void sendChar(char c);

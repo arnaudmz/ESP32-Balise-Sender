@@ -34,6 +34,7 @@ static constexpr char TAG[] = "SPort";
 #define SPORT_BAUD_RATE 57600
 #define RX_IO 5
 #define TX_IO 18
+#define uS_TO_mS_FACTOR 1000
 
 SPortMetric gpsMetrics[SPORT_GPS_METRIC_LAST] = {
     SPortMetric(SPORT_GPS_METRIC_LAT,       SPORT_GPS_METRIC_LAT_LON_ID,   1000),
@@ -298,4 +299,16 @@ uint32_t SPort::readChars() {
     lastBeaconMetricIndex = next;
   }
   return ts;
+}
+
+void SPort::handle(uint32_t end_ts) {
+  while (millis() < end_ts) {
+    uint32_t first_telem_char_ts = readChars();
+    int32_t remaining_ms = 7 - (millis() - first_telem_char_ts);
+    if (remaining_ms > 0) {
+      ESP_LOGD(TAG, "I can sleep for %d ms, before next telem frame", remaining_ms);
+      esp_sleep_enable_timer_wakeup(remaining_ms * uS_TO_mS_FACTOR);
+      esp_light_sleep_start();
+    }
+  }
 }
