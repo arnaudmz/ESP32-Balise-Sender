@@ -70,9 +70,6 @@ beacon(beacon) {
   ESP_ERROR_CHECK( uart_set_pin(uartPort, TX_IO, RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
   ESP_ERROR_CHECK( uart_set_line_inverse(uartPort, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV) );
   ESP_ERROR_CHECK( gpio_pullup_dis((gpio_num_t) RX_IO) );
-  gpio_pad_select_gpio(GPIO_NUM_17);
-  ESP_ERROR_CHECK( gpio_set_direction(GPIO_NUM_17, GPIO_MODE_OUTPUT) );
-  gpio_set_level(GPIO_NUM_17, 0);
 }
 
 void SPort::sendChar(char c) {
