@@ -33,7 +33,8 @@ enum GPSModel {
 
 enum TelemetryMode {
   TELEMETRY_OFF = 0,
-  TELEMETRY_FRSP
+  TELEMETRY_FRSP,
+  TELEMETRY_JETI
 };
 
 class Config {

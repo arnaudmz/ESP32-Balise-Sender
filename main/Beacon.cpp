@@ -38,7 +38,7 @@ static constexpr char TAG[] = "Beacon";
 #define WIFI_CHANNEL CONFIG_WIFI_CHANNEL
 
 static constexpr uint8_t model_id_to_value[] = {1, 2, 3, 4};
-static constexpr uint8_t mass_id_to_value[] = {2, 4, 25, 150};
+static constexpr uint16_t mass_id_to_value[] = {2, 4, 25, 150, 999};
 
 static constexpr uint16_t MAX_BEACON_SIZE = 40 + 32 + droneIDFR::FRAME_PAYLOAD_LEN_MAX;  // default beaconPacket size + max ssid size + max drone id frame size
 uint8_t beaconPacket[MAX_BEACON_SIZE] = {
@@ -90,31 +90,40 @@ void Beacon::sendBeacon(const uint8_t *packet, const uint8_t to_send) {
   ESP_ERROR_CHECK( esp_wifi_stop() );
 }
 
+uint8_t Beacon::getGroupFromID(uint8_t g) {
+  return model_id_to_value[g];
+}
+
+uint16_t Beacon::getMassFromID(uint8_t m) {
+  return mass_id_to_value[m];
+}
+
 void Beacon::computeID() {
   if (switches->enabled()) {
     int gMSB = switches->getGroupMSBState();
     int gLSB = switches->getGroupLSBState();
     int mMSB = switches->getMassMSBState();
     int mLSB = switches->getMassLSBState();
-    snprintf(droneIDStr, 33, "%3s%3s00000000%1d%03d%12s",
-      config->getBuilder(),
-      config->getVersion(),
-      model_id_to_value[(gMSB << 1) + gLSB],
-      mass_id_to_value[(mMSB << 1) + mLSB],
-      config->getSuffix());
-    lastPrefix = model_id_to_value[(gMSB << 1) + gLSB] * 1000 + mass_id_to_value[(mMSB << 1) + mLSB];
+    uint8_t model_group = getGroupFromID((gMSB << 1) + gLSB);
+    uint16_t mass_group = getMassFromID((mMSB << 1) + mLSB);
+    lastPrefix = model_group * 1000 + mass_group;
+    lastPrefixStr[0] = '0' + model_group;
+    lastPrefixStr[1] = '0' + mass_group / 100;
+    lastPrefixStr[2] = '0' + (mass_group % 100) / 10;
+    lastPrefixStr[3] = '0' + mass_group % 10;
+    lastPrefixStr[4] = '\0';
   } else {
-    const char *pref_str = config->getPrefix();
-    snprintf(droneIDStr, 33, "%3s%3s00000000%4s%12s",
-      config->getBuilder(),
-      config->getVersion(),
-      pref_str,
-      config->getSuffix());
-    lastPrefix = (pref_str[0] - '0') * 1000 +
-               (pref_str[1] - '0') * 100 +
-               (pref_str[2] - '0') * 10 +
-               (pref_str[3] - '0');
+    strncpy(lastPrefixStr, config->getPrefix(), 5);
+    lastPrefix = (lastPrefixStr[0] - '0') * 1000 +
+               (lastPrefixStr[1] - '0') * 100 +
+               (lastPrefixStr[2] - '0') * 10 +
+               (lastPrefixStr[3] - '0');
   }
+  snprintf(droneIDStr, 33, "%3s%3s00000000%4s%12s",
+    config->getBuilder(),
+    config->getVersion(),
+    lastPrefixStr,
+    config->getSuffix());
   droneID->set_drone_id(droneIDStr);
   ESP_LOGD(TAG, "Computed ID: %s", droneIDStr);
 }
@@ -213,8 +222,4 @@ void Beacon::handleData() {
     gps->satellites.value(),
     gps->hdop.hdop());
   computeAndSendBeaconIfNeeded();
-}
-
-uint16_t Beacon::getLastPrefix() {
-  return lastPrefix;
 }

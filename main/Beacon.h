@@ -41,14 +41,19 @@ class Beacon {
     void handleData();
     bool hasSetHomeYet() { return hasSetHome; }
     bool hasTakenOffYet() { return hasTakenOff; }
-    uint16_t getLastPrefix();
+    uint16_t getLastPrefix() { return lastPrefix; }
     void computeID();
     uint32_t getSentFramesCount() { return sentFrames; }
+    const char *getLastPrefixStr() { return lastPrefixStr; }
+    const char *getLastID() { return droneIDStr; }
+    uint8_t getGroupFromID(uint8_t g);
+    uint16_t getMassFromID(uint8_t m);
 
   private:
     void sendBeacon(const uint8_t *packet, const uint8_t to_send);
     void computeAndSendBeaconIfNeeded();
-    char droneIDStr[33];
+    char droneIDStr[33] = "ID inconnu";
+    char lastPrefixStr[5] = "0000";
     Config *config;
     LED *led;
     Switches *switches;

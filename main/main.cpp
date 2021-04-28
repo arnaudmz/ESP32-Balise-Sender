@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "Beacon.h"
 #include "Telemetry.h"
 #include "SPort.h"
+#include "Jeti.h"
 #include "droneID_FR.h"
 
 //#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
@@ -113,6 +114,9 @@ void normal_run(void) {
   switch(config.getTelemetryMode()) {
     case TELEMETRY_FRSP:
       t = new SPort(&config, &gps, &beacon);
+      break;
+    case TELEMETRY_JETI:
+      t = new JetiTelemetry(&config, &gps, &beacon);
       break;
     default:
       break;

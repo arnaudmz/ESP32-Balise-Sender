@@ -183,6 +183,9 @@ TelemetryMode Config::getTelemetryMode() {
   if (strcmp(telemetry, "FRSP") == 0) {
     return TELEMETRY_FRSP;
   }
+  if (strcmp(telemetry, "JETI") == 0) {
+    return TELEMETRY_JETI;
+  }
   return TELEMETRY_OFF;
 }
 
@@ -230,6 +233,9 @@ void Config::printConfig() {
       break;
     case TELEMETRY_FRSP:
       ESP_LOGI(TAG, "Telemetry (%s): FrSky SPort", telemetry);
+      break;
+    case TELEMETRY_JETI:
+      ESP_LOGI(TAG, "Telemetry (%s): Jeti Telemetry", telemetry);
       break;
   }
 }
