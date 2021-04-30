@@ -129,6 +129,7 @@ uint8_t JetiTelemetry::writeAndUpdateCRC(uint8_t c, uint8_t crc_seed) {
 }
 
 void JetiTelemetry::sendText(const char *st) {
+  ESP_LOGV(TAG, "Send screen: %s", st);
   uartWrite(0xFE, false);
   uint8_t len = strlen(st);
   for (int i = 0; i < 32; i++) {
@@ -199,7 +200,7 @@ void JetiTelemetry::sendExAlarm(uint8_t b) {
   uartWrite(0x23, true);
   uartWrite(b, true);
 }
-
+#if 0
 void JetiTelemetry::sendExMessage(const char *st) {
   uint8_t crc = 0;
   uint8_t len = strlen(st);
@@ -277,7 +278,7 @@ void JetiTelemetry::sendExMetricData(uint8_t metric_id) {
 //  }
   uartWrite(crc, true);
 }
-
+#endif
 void JetiTelemetry::setHomeScreen() {
   char status[17];
   switch (beacon->getState())
@@ -289,7 +290,7 @@ void JetiTelemetry::setHomeScreen() {
       strcpy(status, "No GPS Precision");
       break;
     case HAS_HOME:
-      strcpy(status, "Pret, au sol");
+      strcpy(status, "Prete, au sol");
       break;
     case IN_FLIGHT:
       strcpy(status, "En vol");
@@ -312,6 +313,9 @@ void JetiTelemetry::setBeaconIDScreen() {
 
 void JetiTelemetry::setSatStatusScreen() {
   double hdop = gps->hdop.hdop();
+  if(hdop <= 0.0) {
+    hdop = 99.99;
+  }
   if (hdop < 10.0) {
     snprintf(screen, 33, "Satellites :  %2dHDOP :      %1.2f", gps->satellites.value(), hdop);
   } else {
@@ -516,17 +520,21 @@ void JetiTelemetry::handle(uint32_t end_ts) {
     if (notifyPrefChange) {
       sendExAlarm('C');
       notifyPrefChange = false;
-    } else {
+    } else if (beacon->getState() > lastNotifiedState) {
       switch (beacon->getState()) {
-        case NO_GPS:
-          sendExAlarm('E');
-          break;
         case GPS_NOT_PRECISE:
           sendExAlarm('I');
+          break;
+        case HAS_HOME:
+          sendExAlarm('0');
+          break;
+        case IN_FLIGHT:
+          sendExAlarm('C');
           break;
         default:
           break;
       }
+      lastNotifiedState = beacon->getState();
     }
     sendText(screen);
     switchToRX();

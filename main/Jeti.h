@@ -60,10 +60,12 @@ class JetiTelemetry: public Telemetry {
     void switchToTX();
     JetiReply lookForReply();
     void sendExAlarm(uint8_t byte);
+#if 0
     void sendExMessage(const char *st);
     void sendExText(const char *st);
     void sendExMetricDesc(uint8_t metric_id, const char *value, const char *unit);
     void sendExMetricData(uint8_t metric_id);
+#endif
     void sendText(const char *st);
     void prepareScreen();
     void setHomeScreen();
@@ -83,5 +85,6 @@ class JetiTelemetry: public Telemetry {
     uint8_t newGroup = 0;
     uint8_t newMass = 0;
     bool notifyPrefChange = false;
+    BeaconState lastNotifiedState = NO_GPS;
 };
 #endif //ifndef __Jeti_h
