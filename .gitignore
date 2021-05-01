@@ -4,3 +4,5 @@ csv
 bin
 *.bin
 nvs_configs/values*.csv
+.pio
+.envrc
