@@ -37,6 +37,102 @@ static constexpr char TAG[] = "Jeti";
 #define uS_TO_mS_FACTOR 1000
 #define cycleWait(wait) for (uint32_t start = getCycleCount(); getCycleCount() - start < wait;)
 
+JetiMetric metrics[JETI_METRIC_KIND_LAST] = {
+  JetiMetric(JETI_METRIC_KIND_SENSOR_DESC, JETI_METRIC_TYPE_SENSOR_DESC, "LaBalise",   NULL),
+  JetiMetric(JETI_METRIC_KIND_PREFIX,      JETI_METRIC_TYPE_INT14,       "Prefixe",    NULL),
+  JetiMetric(JETI_METRIC_KIND_SPEED,       JETI_METRIC_TYPE_INT14,       "Vitesse",    "m/s"),
+  JetiMetric(JETI_METRIC_KIND_ALT,         JETI_METRIC_TYPE_INT14,       "Altitude",   "m"),
+  JetiMetric(JETI_METRIC_KIND_HDOP,        JETI_METRIC_TYPE_INT14,       "HDOP",       NULL),
+  JetiMetric(JETI_METRIC_KIND_SAT,         JETI_METRIC_TYPE_INT6,        "Satellites", NULL)
+};
+
+uint8_t JetiMetric::writeDesc(uint8_t *buffer, uint8_t pos) {
+  uint8_t desc_len = description ? strlen(description) : 0;
+  uint8_t unit_len = unit ? strlen(unit) : 0;
+  buffer[pos++] = kind;
+  buffer[pos++] = (desc_len << 3) | unit_len;
+  for(int i = 0; i < desc_len; i++) {
+    buffer[pos++] = description[i];
+  }
+  for(int i = 0; i < unit_len; i++) {
+    buffer[pos++] = unit[i];
+  }
+  return pos;
+}
+
+#if 0
+uint8_t JetiMetric::getDataLength() {
+  // return data size + 1 (for id/datatype byte)
+  switch (type) {
+    case JETI_METRIC_TYPE_SENSOR_DESC:
+      return 0;
+    case JETI_METRIC_TYPE_INT6:
+      return 2;
+    case JETI_METRIC_TYPE_INT14:
+    case JETI_METRIC_TYPE_INT14_RESERVED_2:
+    case JETI_METRIC_TYPE_INT14_RESERVED_3:
+      return 3;
+    case JETI_METRIC_TYPE_INT22:
+    case JETI_METRIC_TYPE_INT22_DATE_TIME:
+    case JETI_METRIC_TYPE_INT22_RESERVED_6:
+    case JETI_METRIC_TYPE_INT22_RESERVED_7:
+      return 4;
+    case JETI_METRIC_TYPE_INT30:
+    case JETI_METRIC_TYPE_INT30_GPS:
+    case JETI_METRIC_TYPE_INT30_RESERVED_10:
+    case JETI_METRIC_TYPE_INT30_RESERVED_11:
+      return 5;
+    case JETI_METRIC_TYPE_INT38_RESERVED_12:
+    case JETI_METRIC_TYPE_INT38_RESERVED_13:
+    case JETI_METRIC_TYPE_INT38_RESERVED_14:
+    case JETI_METRIC_TYPE_INT38_RESERVED_15:
+      return 6;
+  }
+  return 0;
+}
+#endif
+
+uint8_t JetiMetric::formatINT6b(uint8_t *buffer, uint8_t pos, int8_t value, uint8_t decimals) {
+    buffer[pos++] = (kind << 4) | type;
+    buffer[pos++] = (value & 0x1F) | (value < 0 ? 0x80: 0x00) | (decimals << 5);
+    return pos;
+}
+
+uint8_t JetiMetric::formatINT14b(uint8_t *buffer, uint8_t pos, int16_t value, uint8_t decimals) {
+    buffer[pos++] = (kind << 4) | type;
+    buffer[pos++] = value & 0xff;
+    buffer[pos++] = ((value >> 8) & 0x1F) | (value < 0 ? 0x80: 0x00) | (decimals << 5);
+    return pos;
+}
+
+uint8_t JetiMetric::writeData(uint8_t *buffer, uint8_t pos, TinyGPSPlus *gps, Beacon *beacon) {
+  double hdop;
+  switch(kind) {
+    case JETI_METRIC_KIND_HDOP:
+      hdop = gps->hdop.hdop();
+      if (hdop <= 0.0) {
+        hdop = 99.9;
+      }
+      pos = formatINT14b(buffer, pos, hdop * 10, 1);
+      break;
+    case JETI_METRIC_KIND_SPEED:
+      pos = formatINT14b(buffer, pos, gps->speed.mps() * 10, 1);
+      break;
+    case JETI_METRIC_KIND_SAT:
+      pos = formatINT6b(buffer, pos, gps->satellites.value(), 0);
+      break;
+    case JETI_METRIC_KIND_ALT:
+      pos = formatINT14b(buffer, pos, gps->altitude.meters(), 0);
+      break;
+    case JETI_METRIC_KIND_PREFIX:
+      pos = formatINT14b(buffer, pos, beacon->getLastPrefix(), 0);
+      break;
+    default:
+      break;
+  }
+  return pos;
+}
+
 JetiTelemetry::JetiTelemetry(Config *c, TinyGPSPlus *gps, Beacon *beacon):
 config(c),
 gps(gps),
@@ -59,10 +155,12 @@ beacon(beacon) {
     }
   }
 }
+
 void JetiTelemetry::switchToRX() {
   ESP_ERROR_CHECK( gpio_set_direction(RX_IO, GPIO_MODE_INPUT) );
   ESP_ERROR_CHECK( gpio_pullup_en(RX_IO) );
 }
+
 void JetiTelemetry::switchToTX() {
   ESP_ERROR_CHECK( gpio_pullup_dis(RX_IO) );
   ESP_ERROR_CHECK( gpio_set_direction(RX_IO, GPIO_MODE_OUTPUT) );
@@ -121,11 +219,6 @@ uint8_t JetiTelemetry::updateCRC(uint8_t c, uint8_t crc_seed) {
     crc_u = ( crc_u & 0x80 ) ? POLY ^ ( crc_u << 1 ) : ( crc_u << 1 );
   }
   return crc_u;
-}
-
-uint8_t JetiTelemetry::writeAndUpdateCRC(uint8_t c, uint8_t crc_seed) {
-  uartWrite(c, true);
-  return updateCRC(c, crc_seed);
 }
 
 void JetiTelemetry::sendText(const char *st) {
@@ -200,7 +293,13 @@ void JetiTelemetry::sendExAlarm(uint8_t b) {
   uartWrite(0x23, true);
   uartWrite(b, true);
 }
+
 #if 0
+uint8_t JetiTelemetry::writeAndUpdateCRC(uint8_t c, uint8_t crc_seed) {
+  uartWrite(c, true);
+  return updateCRC(c, crc_seed);
+}
+
 void JetiTelemetry::sendExMessage(const char *st) {
   uint8_t crc = 0;
   uint8_t len = strlen(st);
@@ -213,72 +312,14 @@ void JetiTelemetry::sendExMessage(const char *st) {
   crc = writeAndUpdateCRC(0xA4, crc); // Device ID LSB
   crc = writeAndUpdateCRC(0x00, crc); // Always 0
   crc = writeAndUpdateCRC(0x7f, crc); // Message type
-  crc = writeAndUpdateCRC((0x00 << 5) | len, crc); // Message class (0 = basic info) + length
+  crc = writeAndUpdateCRC((0x01 << 5) | len, crc); // Message class (0 = basic info) + length
   for(int i = 0; i < len; i++) {
     crc = writeAndUpdateCRC(st[i], crc);
   }
   uartWrite(crc, true);
 }
-
-void JetiTelemetry::sendExMetricDesc(uint8_t metric_id, const char *value, const char *unit) {
-  uint8_t value_len = strlen(value);
-  uint8_t unit_len = strlen(unit);
-  uint8_t crc = 0;
-  uartWrite(0x7E, false);
-  uartWrite(0x9F, true);
-  crc = writeAndUpdateCRC((0x00 << 6) | (value_len + unit_len + 8), crc);
-  crc = writeAndUpdateCRC(0x11, crc); // manufactor ID MSB
-  crc = writeAndUpdateCRC(0xA4, crc); // manufactor ID LSB
-  crc = writeAndUpdateCRC(0x11, crc); // Device ID MSB
-  crc = writeAndUpdateCRC(0xA4, crc); // Device ID LSB
-  crc = writeAndUpdateCRC(0x00, crc); // Always 0
-  crc = writeAndUpdateCRC(metric_id, crc); // ID of telemetry value
-  crc = writeAndUpdateCRC((value_len << 3) | unit_len, crc); // Message class (0 = basic info) + length
-  for(int i = 0; i < value_len; i++) {
-    crc = writeAndUpdateCRC(value[i], crc);
-  }
-  for(int i = 0; i < unit_len; i++) {
-    crc = writeAndUpdateCRC(unit[i], crc);
-  }
-  uartWrite(crc, true);
-}
-
-void JetiTelemetry::sendExMetricData(uint8_t metric_id) {
-  //uint8_t value_len = strlen(value);
-  //uint8_t unit_len = strlen(unit);
-  uint8_t crc = 0;
-  uartWrite(0x7E, false);
-  uartWrite(0x9F, true);
-  //0x7E 0x9F 0x4C 0xA1 0xA8 0x5D 0x55 0x00 0x11 0xE8 0x23 0x21 0x1B 0x00 0xF4
-  crc = writeAndUpdateCRC(0x4c, crc);
-  crc = writeAndUpdateCRC(0xA1, crc);
-  crc = writeAndUpdateCRC(0xA8, crc);
-  crc = writeAndUpdateCRC(0x5D, crc);
-  crc = writeAndUpdateCRC(0x55, crc);
-  crc = writeAndUpdateCRC(0x00, crc);
-  crc = writeAndUpdateCRC(0x11, crc);
-  crc = writeAndUpdateCRC(0xE8, crc);
-  crc = writeAndUpdateCRC(0x23, crc);
-  crc = writeAndUpdateCRC(0x21, crc);
-  crc = writeAndUpdateCRC(0x1B, crc);
-  crc = writeAndUpdateCRC(0x00, crc);
-//  crc = writeAndUpdateCRC((0x01 << 6) | (value_len + unit_len + 8), crc);
-//  crc = writeAndUpdateCRC(0x11, crc); // manufactor ID MSB
-//  crc = writeAndUpdateCRC(0xA4, crc); // manufactor ID LSB
-//  crc = writeAndUpdateCRC(0x11, crc); // Device ID MSB
-//  crc = writeAndUpdateCRC(0xA4, crc); // Device ID LSB
-//  crc = writeAndUpdateCRC(0x00, crc); // Always 0
-//  crc = writeAndUpdateCRC(metric_id, crc); // ID of telemetry value
-//  crc = writeAndUpdateCRC((value_len << 3) + unit_len, crc); // Message class (0 = basic info) + length
-//  for(int i = 0; i < value_len; i++) {
-//    crc = writeAndUpdateCRC(value[i], crc);
-//  }
-//  for(int i = 0; i < unit_len; i++) {
-//    crc = writeAndUpdateCRC(unit[i], crc);
-//  }
-  uartWrite(crc, true);
-}
 #endif
+
 void JetiTelemetry::setHomeScreen() {
   char status[17];
   switch (beacon->getState())
@@ -513,9 +554,45 @@ void JetiTelemetry::saveNewPrefix() {
   notifyPrefChange = true;
 }
 
+
+void JetiTelemetry::sendExMetricDesc() {
+  uint8_t pos = 6;
+  pos = metrics[sensor_id].writeDesc(exFrameBuffer, pos);
+  exFrameBuffer[0] = (0x00 << 6) | pos;
+  uint8_t crc = 0;
+  for(int i = 0; i < pos; i++) {
+    crc = updateCRC(exFrameBuffer[i], crc);
+  }
+  exFrameBuffer[pos++] = crc;
+  uartWrite(0x7E, false);
+  uartWrite(0x9F, true);
+  for(int i = 0; i < pos; i++) {
+    uartWrite(exFrameBuffer[i], true);
+  }
+}
+
+void JetiTelemetry::sendExMetricData() {
+  uint8_t pos = 6;
+  // few items to send, they all fit in a single frame
+  for (int i = JETI_METRIC_KIND_SENSOR_DESC + 1; i < JETI_METRIC_KIND_LAST; i++) {
+    pos = metrics[i].writeData(exFrameBuffer, pos, gps, beacon);
+  }
+  exFrameBuffer[0] = (0x01 << 6) | pos;
+  uint8_t crc = 0;
+  for(int i = 0; i < pos; i++) {
+    crc = updateCRC(exFrameBuffer[i], crc);
+  }
+  exFrameBuffer[pos++] = crc;
+  uartWrite(0x7E, false);
+  uartWrite(0x9F, true);
+  for(int i = 0; i < pos; i++) {
+    uartWrite(exFrameBuffer[i], true);
+  }
+}
+
 void JetiTelemetry::handle(uint32_t end_ts) {
   prepareScreen();
-  while((millis() + 20) < end_ts) {
+  while((millis() + 100) < end_ts) {
     switchToTX();
     if (notifyPrefChange) {
       sendExAlarm('C');
@@ -535,6 +612,17 @@ void JetiTelemetry::handle(uint32_t end_ts) {
           break;
       }
       lastNotifiedState = beacon->getState();
+    } else {
+      if (send_desc) {
+        sendExMetricDesc();
+      } else {
+        sendExMetricData();
+      }
+      sensor_id++;
+      if (sensor_id == JETI_METRIC_KIND_LAST) {
+        sensor_id = JETI_METRIC_KIND_SENSOR_DESC;
+        send_desc = !send_desc;
+      }
     }
     sendText(screen);
     switchToRX();
@@ -542,11 +630,12 @@ void JetiTelemetry::handle(uint32_t end_ts) {
     esp_light_sleep_start();
     JetiReply r = lookForReply();
     if (r >= JETI_REPLY_NONE) {
-      if (r < lastReply) {
-        ESP_LOGD(TAG, "Button(s) released: %d", lastReply);
-        navigate(lastReply);
-      }
-      lastReply = r;
+      navigate(r);
+//      if (r < lastReply) {
+//        ESP_LOGD(TAG, "Button(s) released: %d", lastReply);
+//        navigate(lastReply);
+//      }
+//      lastReply = r;
     }
     esp_sleep_enable_timer_wakeup(16 * uS_TO_mS_FACTOR);
     esp_light_sleep_start();
