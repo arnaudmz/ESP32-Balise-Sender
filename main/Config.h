@@ -34,7 +34,8 @@ enum GPSModel {
 enum TelemetryMode {
   TELEMETRY_OFF = 0,
   TELEMETRY_FRSP,
-  TELEMETRY_JETI
+  TELEMETRY_JETI, // Jeti Legacy Telemetry (slow as hell)
+  TELEMETRY_JEEX, // Jeti Telemetry in ExBus Frames (much faster)
 };
 
 class Config {

@@ -118,6 +118,9 @@ void normal_run(void) {
     case TELEMETRY_JETI:
       t = new JetiTelemetry(&config, &gps, &beacon);
       break;
+    case TELEMETRY_JEEX:
+      t = new JetiExBusTelemetry(&config, &gps, &beacon);
+      break;
     default:
       break;
   }

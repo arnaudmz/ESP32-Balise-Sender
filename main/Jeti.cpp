@@ -25,16 +25,20 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "driver/gpio.h"
 #include "esp_sleep.h"
 #include "esp32/clk.h"
+#include "driver/uart.h"
+
+#define RX_BUF_SIZE 1024
+#define JETI_EXBUS_BAUD_RATE 125000
 
 //#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
+//#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 static constexpr char TAG[] = "Jeti";
 #include "esp_log.h"
 
-#define SPORT_BAUD_RATE 9700
 #define RX_IO (gpio_num_t) 5
 #define uS_TO_mS_FACTOR 1000
+#define TX_IO (gpio_num_t) 18
 #define cycleWait(wait) for (uint32_t start = getCycleCount(); getCycleCount() - start < wait;)
 
 JetiMetric metrics[JETI_METRIC_KIND_LAST] = {
@@ -43,7 +47,8 @@ JetiMetric metrics[JETI_METRIC_KIND_LAST] = {
   JetiMetric(JETI_METRIC_KIND_SPEED,       JETI_METRIC_TYPE_INT14,       "Vitesse",    "m/s"),
   JetiMetric(JETI_METRIC_KIND_ALT,         JETI_METRIC_TYPE_INT14,       "Altitude",   "m"),
   JetiMetric(JETI_METRIC_KIND_HDOP,        JETI_METRIC_TYPE_INT14,       "HDOP",       NULL),
-  JetiMetric(JETI_METRIC_KIND_SAT,         JETI_METRIC_TYPE_INT6,        "Satellites", NULL)
+  JetiMetric(JETI_METRIC_KIND_SAT,         JETI_METRIC_TYPE_INT6,        "Satellites", NULL),
+  JetiMetric(JETI_METRIC_KIND_STAT,        JETI_METRIC_TYPE_INT6,        "Statut",     NULL)
 };
 
 uint8_t JetiMetric::writeDesc(uint8_t *buffer, uint8_t pos) {
@@ -59,38 +64,6 @@ uint8_t JetiMetric::writeDesc(uint8_t *buffer, uint8_t pos) {
   }
   return pos;
 }
-
-#if 0
-uint8_t JetiMetric::getDataLength() {
-  // return data size + 1 (for id/datatype byte)
-  switch (type) {
-    case JETI_METRIC_TYPE_SENSOR_DESC:
-      return 0;
-    case JETI_METRIC_TYPE_INT6:
-      return 2;
-    case JETI_METRIC_TYPE_INT14:
-    case JETI_METRIC_TYPE_INT14_RESERVED_2:
-    case JETI_METRIC_TYPE_INT14_RESERVED_3:
-      return 3;
-    case JETI_METRIC_TYPE_INT22:
-    case JETI_METRIC_TYPE_INT22_DATE_TIME:
-    case JETI_METRIC_TYPE_INT22_RESERVED_6:
-    case JETI_METRIC_TYPE_INT22_RESERVED_7:
-      return 4;
-    case JETI_METRIC_TYPE_INT30:
-    case JETI_METRIC_TYPE_INT30_GPS:
-    case JETI_METRIC_TYPE_INT30_RESERVED_10:
-    case JETI_METRIC_TYPE_INT30_RESERVED_11:
-      return 5;
-    case JETI_METRIC_TYPE_INT38_RESERVED_12:
-    case JETI_METRIC_TYPE_INT38_RESERVED_13:
-    case JETI_METRIC_TYPE_INT38_RESERVED_14:
-    case JETI_METRIC_TYPE_INT38_RESERVED_15:
-      return 6;
-  }
-  return 0;
-}
-#endif
 
 uint8_t JetiMetric::formatINT6b(uint8_t *buffer, uint8_t pos, int8_t value, uint8_t decimals) {
     buffer[pos++] = (kind << 4) | type;
@@ -127,6 +100,9 @@ uint8_t JetiMetric::writeData(uint8_t *buffer, uint8_t pos, TinyGPSPlus *gps, Be
     case JETI_METRIC_KIND_PREFIX:
       pos = formatINT14b(buffer, pos, beacon->getLastPrefix(), 0);
       break;
+    case JETI_METRIC_KIND_STAT:
+      pos = formatINT6b(buffer, pos, (int8_t) beacon->getState(), 0);
+      break;
     default:
       break;
   }
@@ -136,24 +112,11 @@ uint8_t JetiMetric::writeData(uint8_t *buffer, uint8_t pos, TinyGPSPlus *gps, Be
 JetiTelemetry::JetiTelemetry(Config *c, TinyGPSPlus *gps, Beacon *beacon):
 config(c),
 gps(gps),
-beacon(beacon) {
+beacon(beacon),
+screen(c, gps, beacon) {
   gpio_pad_select_gpio(RX_IO);
   bitTime = esp_clk_cpu_freq() / 9700;
   switchToRX();
-  const char * pref = config->getPrefix();
-  for (int i = 0; i < 4; i ++) {
-    if (pref[0] - '0' == beacon->getGroupFromID(i)) {
-      newGroup = i;
-      break;
-    }
-  }
-  uint16_t mass = (pref[1] -'0') * 100 + (pref[2] - '0') * 10 + (pref[3] - '0');
-  for (int i = 0; i < 5; i ++) {
-    if (mass == beacon->getMassFromID(i)) {
-      newMass = i;
-      break;
-    }
-  }
 }
 
 void JetiTelemetry::switchToRX() {
@@ -294,267 +257,6 @@ void JetiTelemetry::sendExAlarm(uint8_t b) {
   uartWrite(b, true);
 }
 
-#if 0
-uint8_t JetiTelemetry::writeAndUpdateCRC(uint8_t c, uint8_t crc_seed) {
-  uartWrite(c, true);
-  return updateCRC(c, crc_seed);
-}
-
-void JetiTelemetry::sendExMessage(const char *st) {
-  uint8_t crc = 0;
-  uint8_t len = strlen(st);
-  uartWrite(0x7E, false);
-  uartWrite(0x9F, true);
-  crc = writeAndUpdateCRC((0x02 << 6) | (len + 8), crc);
-  crc = writeAndUpdateCRC(0x11, crc); // manufactor ID MSB
-  crc = writeAndUpdateCRC(0xA4, crc); // manufactor ID LSB
-  crc = writeAndUpdateCRC(0x11, crc); // Device ID MSB
-  crc = writeAndUpdateCRC(0xA4, crc); // Device ID LSB
-  crc = writeAndUpdateCRC(0x00, crc); // Always 0
-  crc = writeAndUpdateCRC(0x7f, crc); // Message type
-  crc = writeAndUpdateCRC((0x01 << 5) | len, crc); // Message class (0 = basic info) + length
-  for(int i = 0; i < len; i++) {
-    crc = writeAndUpdateCRC(st[i], crc);
-  }
-  uartWrite(crc, true);
-}
-#endif
-
-void JetiTelemetry::setHomeScreen() {
-  char status[17];
-  switch (beacon->getState())
-  {
-    case NO_GPS:
-      strcpy(status, "No Fix");
-      break;
-    case GPS_NOT_PRECISE:
-      strcpy(status, "No GPS Precision");
-      break;
-    case HAS_HOME:
-      strcpy(status, "Prete, au sol");
-      break;
-    case IN_FLIGHT:
-      strcpy(status, "En vol");
-      break;
-  }
-  const char *pref = beacon->getLastPrefixStr();
-  snprintf(screen, 33, "LaBalise  [%c%c%c%c]%16s", pref[0], pref[1], pref[2], pref[3], status);
-}
-    
-void JetiTelemetry::setBeaconIDScreen() {
-  const char *id;
-  char v_id[4], m_id[4];
-  id = beacon->getLastID();
-  strncpy(v_id, id, 3);
-  v_id[3] = '\0';
-  strncpy(m_id, &(id[3]), 3);
-  m_id[3] = '\0';
-  snprintf(screen, 33, "%3s %3s %24s", v_id, m_id, &(id[6]));
-}
-
-void JetiTelemetry::setSatStatusScreen() {
-  double hdop = gps->hdop.hdop();
-  if(hdop <= 0.0) {
-    hdop = 99.99;
-  }
-  if (hdop < 10.0) {
-    snprintf(screen, 33, "Satellites :  %2dHDOP :      %1.2f", gps->satellites.value(), hdop);
-  } else {
-    snprintf(screen, 33, "Satellites :  %2dHDOP :     %2.2f", gps->satellites.value(), hdop);
-  }
-}
-
-const char *groups[] = {
-  "\x7f 1 - Captif   \x7e",
-  "\x7f 2 - Planeur  \x7e",
-  "\x7f 3 - Rotor    \x7e",
-  "\x7f 4 - Avion    \x7e"
-};
-
-const char *masses[] = {
-  "\x7f  0.8kg<m<2kg \x7e",
-  "\x7f   2kg<m<4kg  \x7e",
-  "\x7f  4kg<m<25kg  \x7e",
-  "\x7f 25kg<m<150kg \x7e",
-  "\x7f    m>150kg   \x7e"
-};
-
-void JetiTelemetry::setRollerMenuScreen(bool isGroup) {
-  if (isGroup) {
-    snprintf(screen, 33, "*Nouveau Groupe*%16s", groups[newGroup]);
-  } else {
-    snprintf(screen, 33, "*Nouvelle Masse*%16s", masses[newMass]);
-  }
-}
-
-uint8_t JetiTelemetry::getNextIndex(int8_t index, bool direction, uint8_t max) {
-  index += direction ? 1 : -1;
-  if (index < 0) {
-    return max - 1;
-  }
-  if (index == max) {
-    return 0;
-  }
-  return index;
-}
-
-void JetiTelemetry::prepareScreen() {
-  switch(currentMenuItem) {
-    case JETI_MENU_HOME:
-      setHomeScreen();
-      break;
-    case JETI_MENU_BEACON_ID:
-      setBeaconIDScreen();
-      break;
-    case JETI_MENU_SAT_STATUS:
-      setSatStatusScreen();
-      break;
-    case JETI_MENU_SETTINGS_GROUP_MENU:
-      snprintf(screen, 33, "   *Reglages*    ID GROUPE [%c] \x7e", beacon->getLastPrefixStr()[0]);
-      break;
-    case JETI_MENU_SETTINGS_MASS_MENU:
-      snprintf(screen, 33, "   *Reglages*   \x7fID MASSE [%c%c%c] ",
-        beacon->getLastPrefixStr()[1],
-        beacon->getLastPrefixStr()[2],
-        beacon->getLastPrefixStr()[3]);
-      break;
-    case JETI_MENU_SETTINGS_GROUP_NEW:
-      setRollerMenuScreen(true);
-      break;
-    case JETI_MENU_SETTINGS_MASS_NEW:
-      setRollerMenuScreen(false);
-      break;
-    default:
-      break;
-  }
-}
-
-void JetiTelemetry::navigate(JetiReply r) {
-  switch(currentMenuItem) {
-    case JETI_MENU_HOME:
-      if (r == JETI_REPLY_BUTTON_DOWN) {
-        currentMenuItem = JETI_MENU_BEACON_ID;
-      }
-      break;
-    case JETI_MENU_BEACON_ID:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_HOME;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SAT_STATUS;
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SAT_STATUS:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_BEACON_ID;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SETTINGS_GROUP_MENU:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SAT_STATUS;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_NEW;
-          break;
-        case JETI_REPLY_BUTTON_RIGHT:
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_MENU;
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SETTINGS_MASS_MENU:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SAT_STATUS;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_NEW;
-          break;
-        case JETI_REPLY_BUTTON_LEFT:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SETTINGS_GROUP_NEW:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          ESP_LOGD(TAG, "Save NEW GROUP!!!");
-          saveNewPrefix();
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          break;
-        case JETI_REPLY_BUTTON_LEFT:
-          newGroup = getNextIndex(newGroup, false, 4);
-          break;
-        case JETI_REPLY_BUTTON_RIGHT:
-          newGroup = getNextIndex(newGroup, true, 4);
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SETTINGS_MASS_NEW:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_MENU;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          ESP_LOGD(TAG, "Save NEW MASS!!!");
-          saveNewPrefix();
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_MENU;
-          break;
-        case JETI_REPLY_BUTTON_LEFT:
-          newMass = getNextIndex(newMass, false, 5);
-          break;
-        case JETI_REPLY_BUTTON_RIGHT:
-          newMass = getNextIndex(newMass, true, 5);
-          break;
-        default:
-          break;
-      }
-      break;
-    default:
-      break;
-  }
-}
-
-void JetiTelemetry::saveNewPrefix() {
-  uint32_t bin_pref = beacon->getGroupFromID(newGroup) * 1000 + beacon->getMassFromID(newMass);
-  uint8_t new_prefix[4];
-  new_prefix[0] = '0' + bin_pref / 1000;
-  uint32_t left_part = bin_pref % 1000;
-  new_prefix[1] = '0' + left_part / 100;
-  left_part %= 100;
-  new_prefix[2] = '0' + left_part / 10;
-  left_part %= 10;
-  new_prefix[3] = '0' + left_part;
-  ESP_LOGD(TAG, "New Prefix: %d=%c%c%c%c", bin_pref, new_prefix[0], new_prefix[1], new_prefix[2], new_prefix[3]);
-  esp_err_t err = config->setPrefix(new_prefix);
-  if (err != ESP_OK) {
-    ESP_LOGE(TAG, "Can't change prefix: %s", esp_err_to_name(err));
-  }
-  beacon->computeID();
-  notifyPrefChange = true;
-}
-
-
 void JetiTelemetry::sendExMetricDesc() {
   uint8_t pos = 6;
   pos = metrics[sensor_id].writeDesc(exFrameBuffer, pos);
@@ -591,7 +293,7 @@ void JetiTelemetry::sendExMetricData() {
 }
 
 void JetiTelemetry::handle(uint32_t end_ts) {
-  prepareScreen();
+  screen.prepareScreen();
   while((millis() + 100) < end_ts) {
     switchToTX();
     if (notifyPrefChange) {
@@ -624,20 +326,178 @@ void JetiTelemetry::handle(uint32_t end_ts) {
         send_desc = !send_desc;
       }
     }
-    sendText(screen);
+    sendText(screen.getScreen());
     switchToRX();
     esp_sleep_enable_timer_wakeup(3 * uS_TO_mS_FACTOR);
     esp_light_sleep_start();
     JetiReply r = lookForReply();
     if (r >= JETI_REPLY_NONE) {
-      navigate(r);
-//      if (r < lastReply) {
-//        ESP_LOGD(TAG, "Button(s) released: %d", lastReply);
-//        navigate(lastReply);
-//      }
-//      lastReply = r;
+      notifyPrefChange = (screen.navigate(r) == JETI_MENU_ACTION_NOTIFY);
     }
     esp_sleep_enable_timer_wakeup(16 * uS_TO_mS_FACTOR);
     esp_light_sleep_start();
+  }
+}
+
+JetiExBusTelemetry::JetiExBusTelemetry(Config *c, TinyGPSPlus *gps, Beacon *beacon):
+JetiTelemetry(c, gps, beacon, JetiScreen(c, gps, beacon)) {
+  uart_config_t uart_config = {
+    .baud_rate = JETI_EXBUS_BAUD_RATE,
+    .data_bits = UART_DATA_8_BITS,
+    .parity = UART_PARITY_DISABLE,
+    .stop_bits = UART_STOP_BITS_1,
+    .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+    .rx_flow_ctrl_thresh = 0,
+    .source_clk = UART_SCLK_REF_TICK,
+  };
+  // We won't use a buffer for sending data.
+  ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
+  ESP_ERROR_CHECK( uart_param_config(uartPort, &uart_config) );
+  ESP_ERROR_CHECK( uart_set_pin(uartPort, TX_IO, RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+  ESP_ERROR_CHECK( gpio_pullup_dis(RX_IO) );
+}
+
+uint16_t JetiExBusTelemetry::updateCRC16_CCITT(uint16_t crc, uint8_t data) {
+  uint16_t ret_val;
+  data ^= (uint8_t)(crc) & (uint8_t)(0xFF);
+  data ^= data << 4;
+  ret_val = ((((uint16_t)data << 8) | ((crc & 0xFF00) >> 8)) ^ (uint8_t)(data >> 4) ^ ((uint16_t)data << 3));
+  return ret_val;
+}
+
+bool JetiExBusTelemetry::validateCRC16_CCITT(const uint8_t *buffer, uint8_t len) {
+  uint16_t crc = 0;
+	for (int i = 0; i < len - 2; i++) {
+		crc = updateCRC16_CCITT(crc, buffer[i]);
+  }
+  return (buffer[len-2] == (crc & 0xff)) && (buffer[len-1] == (crc >> 8));
+}
+
+void JetiExBusTelemetry::sendResponse(const uint8_t *buffer, uint8_t len) {
+  ESP_ERROR_CHECK( uart_set_pin(uartPort, RX_IO, TX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+  ESP_ERROR_CHECK( gpio_pullup_dis((gpio_num_t) RX_IO) );
+  uart_write_bytes(uartPort, (const char *) buffer, len);
+  ESP_ERROR_CHECK( uart_wait_tx_done(uartPort, pdMS_TO_TICKS(10)) );
+  ESP_ERROR_CHECK( uart_set_pin(uartPort, TX_IO, RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+  ESP_ERROR_CHECK( gpio_pullup_dis((gpio_num_t) RX_IO) );
+  ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_VERBOSE);
+}
+
+bool JetiExBusTelemetry::sendNextTelemetryFrame(uint8_t id) {
+  exBusFrameTelemetryBuffer[3] = id;
+  uint8_t pos = 13;
+  if (send_desc) {
+    pos = metrics[sensor_id].writeDesc(exBusFrameTelemetryBuffer, pos);
+    exBusFrameTelemetryBuffer[7] = (0x00 << 6) | (pos - 7);
+  } else {
+    for (int i = JETI_METRIC_KIND_SENSOR_DESC + 1; i < JETI_METRIC_KIND_LAST; i++) {
+      pos = metrics[i].writeData(exBusFrameTelemetryBuffer, pos, gps, beacon);
+    }
+    exBusFrameTelemetryBuffer[7] = (0x01 << 6) | (pos - 7);
+  }
+  exBusFrameTelemetryBuffer[2] = pos + 3;
+  exBusFrameTelemetryBuffer[5] = pos - 5;
+  uint8_t crc = 0;
+  for(int i = 7; i < pos; i++) {
+    crc = updateCRC(exBusFrameTelemetryBuffer[i], crc);
+  }
+  exBusFrameTelemetryBuffer[pos++] = crc;
+  uint16_t crc16 = 0;
+  for (int i = 0; i < pos; i++) {
+		crc16 = updateCRC16_CCITT(crc16, exBusFrameTelemetryBuffer[i]);
+  }
+  exBusFrameTelemetryBuffer[pos++] = crc16 & 0xff;
+  exBusFrameTelemetryBuffer[pos++] = crc16 >> 8;
+  sendResponse(exBusFrameTelemetryBuffer, pos);
+  sensor_id++;
+  if (sensor_id == JETI_METRIC_KIND_LAST) {
+    sensor_id = JETI_METRIC_KIND_SENSOR_DESC;
+    send_desc = !send_desc;
+  }
+  return true;
+}
+
+void JetiExBusTelemetry::sendScreen(uint8_t id) {
+  exBusFrameJetiBoxMenuBuffer[3] = id;
+  memcpy(&exBusFrameJetiBoxMenuBuffer[6], screen.getScreen(), 32);
+  uint8_t pos = 38;
+  uint16_t crc16 = 0;
+  for (int i = 0; i < pos; i++) {
+		crc16 = updateCRC16_CCITT(crc16, exBusFrameJetiBoxMenuBuffer[i]);
+  }
+  exBusFrameJetiBoxMenuBuffer[pos++] = crc16 & 0xff;
+  exBusFrameJetiBoxMenuBuffer[pos++] = crc16 >> 8;
+  sendResponse(exBusFrameJetiBoxMenuBuffer, pos);
+}
+
+FrameRequestResult JetiExBusTelemetry::isLastFrameValid(const uint8_t *buffer, uint8_t nb_chars, uint8_t len, uint8_t request) {
+    if (buffer[nb_chars - len] == 0x3d &&           // ExBusFrame…
+        buffer[nb_chars - (len - 1)] == 0x01 &&     // That allows an answer
+        buffer[nb_chars - (len - 2)] == len &&      // frame length as expected
+        buffer[nb_chars - (len - 4)] == request) {  // frame requesting for expected request id
+      if (!validateCRC16_CCITT(&buffer[nb_chars - len], len)) {
+        ESP_LOGD(TAG, "Invalid Request Frame");
+        return FRAME_INVALID;
+      }
+      return FRAME_PRESENT;
+    }
+    return FRAME_ABSENT;
+}
+
+uint32_t JetiExBusTelemetry::readChars() {
+  // reading pending / lost stuff
+  size_t pending;
+  uint32_t ts = 0;
+  ESP_ERROR_CHECK( uart_get_buffered_data_len(uartPort, &pending ));
+  int nb_chars = uart_read_bytes(uartPort, rxBuffer, RX_BUF_SIZE, pdMS_TO_TICKS(2));
+  if (nb_chars >=2 ) {
+    ts = millis();
+    if(nb_chars > 2) {
+      ESP_LOGV(TAG, "Read %d bytes (%d pending)", nb_chars, pending);
+      ESP_LOG_BUFFER_HEXDUMP(TAG, rxBuffer, nb_chars, ESP_LOG_VERBOSE);
+    }
+    if (isLastFrameValid(rxBuffer, nb_chars, 8, 0x3a) == FRAME_PRESENT) {
+      uint8_t frame_id = rxBuffer[nb_chars - 5];
+      ESP_LOGV(TAG, "Valid Request for Telemetry");
+      cycleWait(esp_clk_cpu_freq() / 450); // to get around 4ms
+      sendNextTelemetryFrame(frame_id);
+      return ts;
+    }
+    if (isLastFrameValid(rxBuffer, nb_chars, 9, 0x3b) == FRAME_PRESENT) {
+      uint8_t frame_id = rxBuffer[nb_chars - 6];
+      uint8_t buttons = rxBuffer[nb_chars - 3];
+      ESP_LOGV(TAG, "Valid Request for JetiBox Screen, buttons : 0x%x, L=%d, D=%d, U=%d, R=%d", buttons, !(buttons&0x80), !(buttons&0x40), !(buttons&0x20), !(buttons&0x10));
+      if (millis() - lastMenuExitTS > 3000) {
+        switch (screen.navigate((JetiReply) ((~buttons) & 0xf0))) {
+          case JETI_MENU_ACTION_NONE:
+            cycleWait(esp_clk_cpu_freq() / 400); // to get around 4ms
+            screen.prepareScreen();
+            sendScreen(frame_id);
+            break;
+          case JETI_MENU_ACTION_NOTIFY:
+            // TODO
+            break;
+          default:
+            ESP_LOGD(TAG, "Not Sending any JetiBox Screen");
+            lastMenuExitTS = millis();
+            break;
+        }
+      } else {
+        ESP_LOGD(TAG, "Keeping Quiet, Not Sending any JetiBox Screen");
+      }
+    }
+  }
+  return ts;
+}
+
+void JetiExBusTelemetry::handle(uint32_t end_ts) {
+  while (millis() < end_ts) {
+    uint32_t first_telem_char_ts = readChars();
+    int32_t remaining_ms = 15 - (millis() - first_telem_char_ts);
+    if (remaining_ms > 0) {
+      ESP_LOGV(TAG, "I can sleep for %d ms, before next telem frame", remaining_ms);
+      esp_sleep_enable_timer_wakeup(remaining_ms * uS_TO_mS_FACTOR);
+      esp_light_sleep_start();
+    }
   }
 }

@@ -25,27 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "TinyGPS++.h"
 #include "Beacon.h"
 #include "Telemetry.h"
-
-enum JetiReply {
-  JETI_REPLY_ABSENT = -2,
-  JETI_REPLY_INVALID = -1,
-  JETI_REPLY_NONE = 0,
-  JETI_REPLY_BUTTON_LEFT = 0x80,
-  JETI_REPLY_BUTTON_DOWN = 0x40,
-  JETI_REPLY_BUTTON_UP = 0x20,
-  JETI_REPLY_BUTTON_RIGHT = 0x10
-};
-
-enum MenuItem {
-  JETI_MENU_HOME = 0,
-  JETI_MENU_BEACON_ID,
-  JETI_MENU_SAT_STATUS,
-  JETI_MENU_SETTINGS_GROUP_MENU,
-  JETI_MENU_SETTINGS_GROUP_NEW,
-  JETI_MENU_SETTINGS_MASS_MENU,
-  JETI_MENU_SETTINGS_MASS_NEW,
-  JETI_MENU_LAST
-};
+#include "JetiScreen.h"
 
 enum JetiMetricKind {
   JETI_METRIC_KIND_SENSOR_DESC = 0,
@@ -54,27 +34,34 @@ enum JetiMetricKind {
   JETI_METRIC_KIND_ALT,
   JETI_METRIC_KIND_HDOP,
   JETI_METRIC_KIND_SAT,
+  JETI_METRIC_KIND_STAT,
   JETI_METRIC_KIND_LAST
 };
 
 enum JetiMetricType {
   JETI_METRIC_TYPE_SENSOR_DESC = -1,
   JETI_METRIC_TYPE_INT6 = 0,          // 0
-  JETI_METRIC_TYPE_INT14,             // 1
-  JETI_METRIC_TYPE_INT14_RESERVED_2,  // 2
-  JETI_METRIC_TYPE_INT14_RESERVED_3,  // 3
-  JETI_METRIC_TYPE_INT22,             // 4
-  JETI_METRIC_TYPE_INT22_DATE_TIME,   // 5
-  JETI_METRIC_TYPE_INT22_RESERVED_6,  // 6
-  JETI_METRIC_TYPE_INT22_RESERVED_7,  // 7
-  JETI_METRIC_TYPE_INT30,             // 8
-  JETI_METRIC_TYPE_INT30_GPS,         // 9
-  JETI_METRIC_TYPE_INT30_RESERVED_10, // 10
-  JETI_METRIC_TYPE_INT30_RESERVED_11, // 11
-  JETI_METRIC_TYPE_INT38_RESERVED_12, // 12
-  JETI_METRIC_TYPE_INT38_RESERVED_13, // 13
-  JETI_METRIC_TYPE_INT38_RESERVED_14, // 14
-  JETI_METRIC_TYPE_INT38_RESERVED_15  // 15
+  JETI_METRIC_TYPE_INT14 = 1         // 1
+//  JETI_METRIC_TYPE_INT14_RESERVED_2,  // 2 unused
+//  JETI_METRIC_TYPE_INT14_RESERVED_3,  // 3
+//  JETI_METRIC_TYPE_INT22,             // 4
+//  JETI_METRIC_TYPE_INT22_DATE_TIME,   // 5
+//  JETI_METRIC_TYPE_INT22_RESERVED_6,  // 6
+//  JETI_METRIC_TYPE_INT22_RESERVED_7,  // 7
+//  JETI_METRIC_TYPE_INT30,             // 8
+//  JETI_METRIC_TYPE_INT30_GPS,         // 9
+//  JETI_METRIC_TYPE_INT30_RESERVED_10, // 10
+//  JETI_METRIC_TYPE_INT30_RESERVED_11, // 11
+//  JETI_METRIC_TYPE_INT38_RESERVED_12, // 12
+//  JETI_METRIC_TYPE_INT38_RESERVED_13, // 13
+//  JETI_METRIC_TYPE_INT38_RESERVED_14, // 14
+//  JETI_METRIC_TYPE_INT38_RESERVED_15  // 15
+};
+
+enum FrameRequestResult {
+  FRAME_ABSENT = 0,
+  FRAME_INVALID,
+  FRAME_PRESENT,
 };
 
 class JetiMetric {
@@ -82,9 +69,6 @@ class JetiMetric {
     JetiMetric(JetiMetricKind kind, JetiMetricType type, const char *description, const char *unit):
       kind(kind), type(type), description(description), unit(unit) {}
     uint8_t writeDesc(uint8_t *buffer, uint8_t pos); // append description to payload
-#if 0
-    uint8_t getDataLength(); // compute length of data (to see if it fits in a data frame)
-#endif
     uint8_t writeData(uint8_t *buffer, uint8_t pos, TinyGPSPlus *gps, Beacon *beacon); // append this metric data to payload
   private:
     uint8_t formatINT14b(uint8_t *buffer, uint8_t pos, int16_t value, uint8_t decimals);
@@ -99,9 +83,17 @@ class JetiTelemetry: public Telemetry {
   public:
     JetiTelemetry(Config *c, TinyGPSPlus *gps, Beacon *beacon);
     virtual void handle(uint32_t end_ts);
-  private:
+  protected:
+    JetiTelemetry(Config *c, TinyGPSPlus *gps, Beacon *beacon, JetiScreen screen): config(c), gps(gps), beacon(beacon), screen(screen) {};
     uint32_t getCycleCount();
     uint8_t updateCRC(uint8_t c, uint8_t crc_seed);
+    Config *config;
+    TinyGPSPlus *gps;
+    Beacon *beacon;
+    uint8_t sensor_id = JETI_METRIC_KIND_SENSOR_DESC;
+    bool send_desc = true;
+    JetiScreen screen;
+  private:
     void uartWrite(uint8_t byte, bool bit8);
     void switchToRX();
     void switchToTX();
@@ -114,34 +106,56 @@ class JetiTelemetry: public Telemetry {
     void sendExMetricData();
     void sendExMetricDesc();
     void sendText(const char *st);
-    void prepareScreen();
-    void setHomeScreen();
-    void setBeaconIDScreen();
-    void setSatStatusScreen();
-    void setRollerMenuScreen(bool isGroup);
-    uint8_t getNextIndex(int8_t index, bool direction, uint8_t max);
-    void saveNewPrefix();
-    void navigate(JetiReply r);
     uint8_t exFrameBuffer[26] = {
         0x00, // will be computed for frame type + length
-        0x11, // manufactor ID MSB
-        0xA4, // manufactor ID LSB
-        0x11, // Device ID MSB
-        0xA4, // Device ID LSB
+        0x11, // manufactor ID LSB
+        0xA4, // manufactor ID MSB
+        0xca, // Device ID LSB
+        0xfe, // Device ID MSB
         0x00  // Always 0
     };
-    Config *config;
-    TinyGPSPlus *gps;
-    Beacon *beacon;
     uint32_t bitTime;
-    char screen[33];
-    MenuItem currentMenuItem = JETI_MENU_HOME;
-    //JetiReply lastReply = JETI_REPLY_NONE;
-    uint8_t newGroup = 0;
-    uint8_t newMass = 0;
     bool notifyPrefChange = false;
     BeaconState lastNotifiedState = NO_GPS;
-    uint8_t sensor_id = JETI_METRIC_KIND_SENSOR_DESC;
-    bool send_desc = true;
+};
+
+class JetiExBusTelemetry: public JetiTelemetry {
+  public:
+    JetiExBusTelemetry(Config *c, TinyGPSPlus *gps, Beacon *beacon);
+    virtual void handle(uint32_t end_ts);
+  private:
+    bool sendNextTelemetryFrame(uint8_t id);
+    void sendScreen(uint8_t id);
+    uint32_t readChars();
+    uint16_t updateCRC16_CCITT(uint16_t crc, uint8_t data);
+    bool validateCRC16_CCITT(const uint8_t *buffer, uint8_t len);
+    void sendResponse(const uint8_t *buffer, uint8_t len);
+    FrameRequestResult isLastFrameValid(const uint8_t *buffer, uint8_t nb_chars, uint8_t len, uint8_t request);
+    const uart_port_t uartPort = UART_NUM_1;
+    uint8_t rxBuffer[RX_BUF_SIZE];
+    uint32_t lastMenuExitTS = 0;
+    uint8_t exBusFrameTelemetryBuffer[40] = {
+        0x3B, // Answer header
+        0x01, // Answer header
+        0x00, // length (will be computed later on)
+        0x00, // ID will be copied from request
+        0x3a, // Type (0x3a for telemetry)
+        0x00, // sub-length (will be computed later on)
+        0x9f, // Teletry (anything that ends in 0xf)
+        0x00, // will be computed for frame type + length
+        0x11, // manufactor ID LSB
+        0xA4, // manufactor ID MSB
+        0xca, // Device ID LSB
+        0xfe, // Device ID MSB
+        0x00  // Always 0
+    };
+    uint8_t exBusFrameJetiBoxMenuBuffer[40] = {
+        0x3B, // Answer header
+        0x01, // Answer header
+        0x28, // length (always 40 for Screen)
+        0x00, // ID will be copied from request
+        0x3b, // Type (0x3b for JetiScreen)
+        0x20  // sub-length (always 32 for Screen)
+    };
 };
 #endif //ifndef __Jeti_h
