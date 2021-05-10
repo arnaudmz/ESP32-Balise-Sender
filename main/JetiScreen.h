@@ -38,10 +38,8 @@ enum JetiMenuItem {
   JETI_MENU_HOME = 0,
   JETI_MENU_BEACON_ID,
   JETI_MENU_SAT_STATUS,
-  JETI_MENU_SETTINGS_GROUP_MENU,
-  JETI_MENU_SETTINGS_GROUP_NEW,
-  JETI_MENU_SETTINGS_MASS_MENU,
-  JETI_MENU_SETTINGS_MASS_NEW,
+  JETI_MENU_SETTINGS_GROUP,
+  JETI_MENU_SETTINGS_MASS,
   JETI_MENU_LAST
 };
 
@@ -63,7 +61,7 @@ class JetiScreen {
     void setSatStatusScreen();
     void setRollerMenuScreen(bool isGroup);
     uint8_t getNextIndex(int8_t index, bool direction, uint8_t max);
-    void saveNewPrefix();
+    bool saveNewPrefix();
     Config *config;
     TinyGPSPlus *gps;
     Beacon *beacon;

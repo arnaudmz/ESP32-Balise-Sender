@@ -90,25 +90,28 @@ void JetiScreen::setSatStatusScreen() {
 }
 
 const char *groups[] = {
-  "\x7f 1 - Captif   \x7e",
-  "\x7f 2 - Planeur  \x7e",
-  "\x7f 3 - Rotor    \x7e",
-  "\x7f 4 - Avion    \x7e"
+  "\x7fG1     Captifs\x7e",
+  "\x7fG2    Planeurs\x7e",
+  "\x7fG3      Rotors\x7e",
+  "\x7fG4      Avions\x7e"
 };
 
 const char *masses[] = {
-  "\x7f  0.8kg<m<2kg \x7e",
-  "\x7f   2kg<m<4kg  \x7e",
-  "\x7f  4kg<m<25kg  \x7e",
-  "\x7f 25kg<m<150kg \x7e",
-  "\x7f    m>150kg   \x7e"
+  "\x7fM002  0.8<kg<2\x7e",
+  "\x7fM004    2<kg<4\x7e",
+  "\x7fM025   4<kg<25\x7e",
+  "\x7fM150 25<kg<150\x7e",
+  "\x7fM999  kg>150kg\x7e"
 };
 
 void JetiScreen::setRollerMenuScreen(bool isGroup) {
+  snprintf(screen, 33, "%16s%16s", groups[newGroup], masses[newMass]);
   if (isGroup) {
-    snprintf(screen, 33, "*Nouveau Groupe*%16s", groups[newGroup]);
+    screen[16] = ' ';
+    screen[31] = ' ';
   } else {
-    snprintf(screen, 33, "*Nouvelle Masse*%16s", masses[newMass]);
+    screen[0] = ' ';
+    screen[15] = ' ';
   }
 }
 
@@ -134,19 +137,10 @@ void JetiScreen::prepareScreen() {
     case JETI_MENU_SAT_STATUS:
       setSatStatusScreen();
       break;
-    case JETI_MENU_SETTINGS_GROUP_MENU:
-      snprintf(screen, 33, "   *Reglages*    ID GROUPE [%c] \x7e", beacon->getLastPrefixStr()[0]);
-      break;
-    case JETI_MENU_SETTINGS_MASS_MENU:
-      snprintf(screen, 33, "   *Reglages*   \x7fID MASSE [%c%c%c] ",
-        beacon->getLastPrefixStr()[1],
-        beacon->getLastPrefixStr()[2],
-        beacon->getLastPrefixStr()[3]);
-      break;
-    case JETI_MENU_SETTINGS_GROUP_NEW:
+    case JETI_MENU_SETTINGS_GROUP:
       setRollerMenuScreen(true);
       break;
-    case JETI_MENU_SETTINGS_MASS_NEW:
+    case JETI_MENU_SETTINGS_MASS:
       setRollerMenuScreen(false);
       break;
     default:
@@ -155,24 +149,31 @@ void JetiScreen::prepareScreen() {
 }
 
 JetiMenuAction JetiScreen::navigate(JetiReply r) {
+  JetiMenuAction action = JETI_MENU_ACTION_NONE;
   if (r < JETI_REPLY_NONE) {
-    return JETI_MENU_ACTION_NONE;
+    return action;
   }
+  ESP_LOGV(TAG, "Action Request (was: 0x%x, now: 0x%x)", lastReply, r);
   if ((millis() - lastButtonChangeTS) < 50) {
-    ESP_LOGD(TAG, "Debounce (too soon)");
-    return JETI_MENU_ACTION_NONE;
+    ESP_LOGV(TAG, "Debounce (too soon)");
+    return action;
   }
   if (r == lastReply) {
-    ESP_LOGD(TAG, "Debounce (same button(s))");
-    return JETI_MENU_ACTION_NONE;
+    ESP_LOGV(TAG, "Debounce (same button(s))");
+    return action;
   }
-  lastReply = r;
   lastButtonChangeTS = millis();
+  if (r > lastReply) {
+    ESP_LOGV(TAG, "Wait for button release to act");
+    lastReply = r;
+    return action;
+  }
+  ESP_LOGV(TAG, "Action (was: 0x%x, now: 0x%x)", lastReply, r);
   switch(currentMenuItem) {
     case JETI_MENU_HOME:
-      switch(r) {
+      switch(lastReply) {
         case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_BEACON_ID;
+          currentMenuItem = JETI_MENU_SAT_STATUS;
           break;
         case JETI_REPLY_BUTTON_UP:
           return JETI_MENU_ACTION_EXIT;
@@ -180,95 +181,64 @@ JetiMenuAction JetiScreen::navigate(JetiReply r) {
           break;
       }
       break;
-    case JETI_MENU_BEACON_ID:
-      switch(r) {
+    case JETI_MENU_SAT_STATUS:
+      switch(lastReply) {
         case JETI_REPLY_BUTTON_UP:
           currentMenuItem = JETI_MENU_HOME;
           break;
         case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SAT_STATUS;
+          currentMenuItem = JETI_MENU_BEACON_ID;
           break;
         default:
           break;
       }
       break;
-    case JETI_MENU_SAT_STATUS:
-      switch(r) {
+    case JETI_MENU_BEACON_ID:
+      switch(lastReply) {
         case JETI_REPLY_BUTTON_UP:
+          currentMenuItem = JETI_MENU_SAT_STATUS;
+          break;
+        case JETI_REPLY_BUTTON_DOWN:
+          currentMenuItem = JETI_MENU_SETTINGS_GROUP;
+          break;
+        default:
+          break;
+      }
+      break;
+    case JETI_MENU_SETTINGS_GROUP:
+      switch(lastReply) {
+        case JETI_REPLY_BUTTON_UP:
+          ESP_LOGD(TAG, "Save NEW PREFIX!!!");
+          if (saveNewPrefix()) {
+            action = JETI_MENU_ACTION_NOTIFY;
+          } else {
+            action = JETI_MENU_ACTION_NONE;
+          }
           currentMenuItem = JETI_MENU_BEACON_ID;
           break;
         case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SETTINGS_GROUP_MENU:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SAT_STATUS;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_NEW;
-          break;
-        case JETI_REPLY_BUTTON_RIGHT:
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_MENU;
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SETTINGS_MASS_MENU:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SAT_STATUS;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_NEW;
-          break;
-        case JETI_REPLY_BUTTON_LEFT:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          break;
-        default:
-          break;
-      }
-      break;
-    case JETI_MENU_SETTINGS_GROUP_NEW:
-      switch(r) {
-        case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          ESP_LOGD(TAG, "Save NEW GROUP!!!");
-          saveNewPrefix();
-          currentMenuItem = JETI_MENU_SETTINGS_GROUP_MENU;
-          return JETI_MENU_ACTION_NOTIFY;
-        case JETI_REPLY_BUTTON_LEFT:
-          newGroup = getNextIndex(newGroup, false, 4);
+          currentMenuItem = JETI_MENU_SETTINGS_MASS;
           break;
         case JETI_REPLY_BUTTON_RIGHT:
           newGroup = getNextIndex(newGroup, true, 4);
           break;
+        case JETI_REPLY_BUTTON_LEFT:
+          newGroup = getNextIndex(newGroup, false, 4);
+          break;
         default:
           break;
       }
       break;
-    case JETI_MENU_SETTINGS_MASS_NEW:
-      switch(r) {
+    case JETI_MENU_SETTINGS_MASS:
+      switch(lastReply) {
         case JETI_REPLY_BUTTON_UP:
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_MENU;
-          break;
-        case JETI_REPLY_BUTTON_DOWN:
-          ESP_LOGD(TAG, "Save NEW MASS!!!");
-          saveNewPrefix();
-          currentMenuItem = JETI_MENU_SETTINGS_MASS_MENU;
-          return JETI_MENU_ACTION_NOTIFY;
-        case JETI_REPLY_BUTTON_LEFT:
-          newMass = getNextIndex(newMass, false, 5);
+          currentMenuItem = JETI_MENU_SETTINGS_GROUP;
           break;
         case JETI_REPLY_BUTTON_RIGHT:
           newMass = getNextIndex(newMass, true, 5);
+          break;
+        case JETI_REPLY_BUTTON_LEFT:
+          newMass = getNextIndex(newMass, false, 5);
           break;
         default:
           break;
@@ -277,10 +247,11 @@ JetiMenuAction JetiScreen::navigate(JetiReply r) {
     default:
       break;
   }
-  return JETI_MENU_ACTION_NONE;
+  lastReply = r;
+  return action;
 }
 
-void JetiScreen::saveNewPrefix() {
+bool JetiScreen::saveNewPrefix() {
   uint32_t bin_pref = beacon->getGroupFromID(newGroup) * 1000 + beacon->getMassFromID(newMass);
   uint8_t new_prefix[4];
   new_prefix[0] = '0' + bin_pref / 1000;
@@ -290,10 +261,16 @@ void JetiScreen::saveNewPrefix() {
   new_prefix[2] = '0' + left_part / 10;
   left_part %= 10;
   new_prefix[3] = '0' + left_part;
+  if (memcmp(new_prefix, config->getPrefix(), 4) == 0) {
+    ESP_LOGD(TAG, "Not changing prefix, same as previous");
+    return false;
+  }
   ESP_LOGD(TAG, "New Prefix: %d=%c%c%c%c", bin_pref, new_prefix[0], new_prefix[1], new_prefix[2], new_prefix[3]);
   esp_err_t err = config->setPrefix(new_prefix);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Can't change prefix: %s", esp_err_to_name(err));
+    return false;
   }
   beacon->computeID();
+  return true;
 }

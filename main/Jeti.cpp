@@ -31,8 +31,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define JETI_EXBUS_BAUD_RATE 125000
 
 //#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-//#define LOG_LOCAL_LEVEL ESP_LOG_INFO
+//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 static constexpr char TAG[] = "Jeti";
 #include "esp_log.h"
 
@@ -117,6 +117,8 @@ screen(c, gps, beacon) {
   gpio_pad_select_gpio(RX_IO);
   bitTime = esp_clk_cpu_freq() / 9700;
   switchToRX();
+  //gpio_pad_select_gpio(GPIO_NUM_17);
+  //ESP_ERROR_CHECK( gpio_set_direction(GPIO_NUM_17, GPIO_MODE_OUTPUT) );
 }
 
 void JetiTelemetry::switchToRX() {
@@ -184,7 +186,7 @@ uint8_t JetiTelemetry::updateCRC(uint8_t c, uint8_t crc_seed) {
   return crc_u;
 }
 
-void JetiTelemetry::sendText(const char *st) {
+void JetiTelemetry::sendJetiBoxScreen(const char *st) {
   ESP_LOGV(TAG, "Send screen: %s", st);
   uartWrite(0xFE, false);
   uint8_t len = strlen(st);
@@ -198,11 +200,12 @@ void JetiTelemetry::sendText(const char *st) {
   uartWrite(0xFF, false);
 }
 
-//#define BLINK gpio_set_level(GPIO_NUM_17, 1); gpio_set_level(GPIO_NUM_17, 0)
+#define BLINK gpio_set_level(GPIO_NUM_17, 1); gpio_set_level(GPIO_NUM_17, 0)
 
 JetiReply JetiTelemetry::lookForReply() {
   uint32_t now = millis();
-  while (millis() - now < 5) {
+  while (millis() - now < 10) {
+    //BLINK;
     if (gpio_get_level(RX_IO) == 0) { // start bit
       portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
       uint8_t computed_parity = 0, read_parity;
@@ -210,7 +213,7 @@ JetiReply JetiTelemetry::lookForReply() {
       bool bit8;
       portENTER_CRITICAL(&mux);
       //BLINK;
-      cycleWait(bitTime + (bitTime >> 1)); // start bit
+      cycleWait(bitTime + (bitTime >> 4)); // start bit
       for (int i = 0; i < 8; i++) {
         if (gpio_get_level(RX_IO)) {
           computed_parity ++;
@@ -250,12 +253,34 @@ JetiReply JetiTelemetry::lookForReply() {
   return JETI_REPLY_ABSENT; // timeout
 }
 
+#if 0
 void JetiTelemetry::sendExAlarm(uint8_t b) {
   uartWrite(0x7E, false);
   uartWrite(0x52, true);
   uartWrite(0x23, true);
   uartWrite(b, true);
 }
+
+void JetiTelemetry::sendExMessage(const char *st) {
+  uint8_t pos = 8;
+  uint8_t len = strlen(st);
+  memcpy(&exFrameBuffer[pos], st, len);
+  pos += len;
+  exFrameBuffer[0] = (0x02 << 6) | pos;
+  exFrameBuffer[6] = 0xca; // Primary identifier of the message type??
+  exFrameBuffer[7] = (1 << 5) | len;
+  uint8_t crc = 0;
+  for(int i = 0; i < pos; i++) {
+    crc = updateCRC(exFrameBuffer[i], crc);
+  }
+  exFrameBuffer[pos++] = crc;
+  uartWrite(0x7E, false);
+  uartWrite(0x9F, true);
+  for(int i = 0; i < pos; i++) {
+    uartWrite(exFrameBuffer[i], true);
+  }
+}
+#endif
 
 void JetiTelemetry::sendExMetricDesc() {
   uint8_t pos = 6;
@@ -294,47 +319,25 @@ void JetiTelemetry::sendExMetricData() {
 
 void JetiTelemetry::handle(uint32_t end_ts) {
   screen.prepareScreen();
-  while((millis() + 100) < end_ts) {
+  while((millis() + 150) < end_ts) {
     switchToTX();
-    if (notifyPrefChange) {
-      sendExAlarm('C');
-      notifyPrefChange = false;
-    } else if (beacon->getState() > lastNotifiedState) {
-      switch (beacon->getState()) {
-        case GPS_NOT_PRECISE:
-          sendExAlarm('I');
-          break;
-        case HAS_HOME:
-          sendExAlarm('0');
-          break;
-        case IN_FLIGHT:
-          sendExAlarm('C');
-          break;
-        default:
-          break;
-      }
-      lastNotifiedState = beacon->getState();
+    if (send_desc) {
+      sendExMetricDesc();
     } else {
-      if (send_desc) {
-        sendExMetricDesc();
-      } else {
-        sendExMetricData();
-      }
-      sensor_id++;
-      if (sensor_id == JETI_METRIC_KIND_LAST) {
-        sensor_id = JETI_METRIC_KIND_SENSOR_DESC;
-        send_desc = !send_desc;
-      }
+      sendExMetricData();
     }
-    sendText(screen.getScreen());
+    sensor_id++;
+    if (sensor_id == JETI_METRIC_KIND_LAST) {
+      sensor_id = JETI_METRIC_KIND_SENSOR_DESC;
+      send_desc = !send_desc;
+    }
+    sendJetiBoxScreen(screen.getScreen());
     switchToRX();
-    esp_sleep_enable_timer_wakeup(3 * uS_TO_mS_FACTOR);
-    esp_light_sleep_start();
     JetiReply r = lookForReply();
     if (r >= JETI_REPLY_NONE) {
-      notifyPrefChange = (screen.navigate(r) == JETI_MENU_ACTION_NOTIFY);
+      screen.navigate(r); // ignore return value (TODO: no notification so far)
     }
-    esp_sleep_enable_timer_wakeup(16 * uS_TO_mS_FACTOR);
+    esp_sleep_enable_timer_wakeup(50 * uS_TO_mS_FACTOR);
     esp_light_sleep_start();
   }
 }
@@ -467,23 +470,17 @@ uint32_t JetiExBusTelemetry::readChars() {
       uint8_t frame_id = rxBuffer[nb_chars - 6];
       uint8_t buttons = rxBuffer[nb_chars - 3];
       ESP_LOGV(TAG, "Valid Request for JetiBox Screen, buttons : 0x%x, L=%d, D=%d, U=%d, R=%d", buttons, !(buttons&0x80), !(buttons&0x40), !(buttons&0x20), !(buttons&0x10));
-      if (millis() - lastMenuExitTS > 3000) {
-        switch (screen.navigate((JetiReply) ((~buttons) & 0xf0))) {
-          case JETI_MENU_ACTION_NONE:
-            cycleWait(esp_clk_cpu_freq() / 400); // to get around 4ms
-            screen.prepareScreen();
-            sendScreen(frame_id);
-            break;
-          case JETI_MENU_ACTION_NOTIFY:
-            // TODO
-            break;
-          default:
-            ESP_LOGD(TAG, "Not Sending any JetiBox Screen");
-            lastMenuExitTS = millis();
-            break;
-        }
-      } else {
-        ESP_LOGD(TAG, "Keeping Quiet, Not Sending any JetiBox Screen");
+      switch (screen.navigate((JetiReply) ((~buttons) & 0xf0))) {
+        case JETI_MENU_ACTION_NONE:
+          cycleWait(esp_clk_cpu_freq() / 400); // to get around 4ms
+          screen.prepareScreen();
+          sendScreen(frame_id);
+          break;
+        case JETI_MENU_ACTION_NOTIFY:
+          // TODO
+          break;
+        default:
+          break;
       }
     }
   }

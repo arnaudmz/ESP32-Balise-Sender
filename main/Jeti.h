@@ -64,6 +64,11 @@ enum FrameRequestResult {
   FRAME_PRESENT,
 };
 
+#define JETI_DEVICE_MANUFACTOR_MSB 0xa4
+#define JETI_DEVICE_MANUFACTOR_LSB 0x11
+#define JETI_DEVICE_DEVICE_MSB     0xca
+#define JETI_DEVICE_DEVICE_LSB     0xfe
+
 class JetiMetric {
   public:
     JetiMetric(JetiMetricKind kind, JetiMetricType type, const char *description, const char *unit):
@@ -98,25 +103,22 @@ class JetiTelemetry: public Telemetry {
     void switchToRX();
     void switchToTX();
     JetiReply lookForReply();
-    void sendExAlarm(uint8_t byte);
 #if 0
-    uint8_t writeAndUpdateCRC(uint8_t c, uint8_t crc_seed);
     void sendExMessage(const char *st);
+    void sendExAlarm(uint8_t byte);
 #endif
     void sendExMetricData();
     void sendExMetricDesc();
-    void sendText(const char *st);
+    void sendJetiBoxScreen(const char *st);
     uint8_t exFrameBuffer[26] = {
         0x00, // will be computed for frame type + length
-        0x11, // manufactor ID LSB
-        0xA4, // manufactor ID MSB
-        0xca, // Device ID LSB
-        0xfe, // Device ID MSB
+        JETI_DEVICE_MANUFACTOR_LSB, // Manufactor ID LSB
+        JETI_DEVICE_MANUFACTOR_MSB, // Manufactor ID MSB
+        JETI_DEVICE_DEVICE_LSB,     // Device ID LSB
+        JETI_DEVICE_DEVICE_MSB,     // Device ID MSB
         0x00  // Always 0
     };
     uint32_t bitTime;
-    bool notifyPrefChange = false;
-    BeaconState lastNotifiedState = NO_GPS;
 };
 
 class JetiExBusTelemetry: public JetiTelemetry {
@@ -133,7 +135,6 @@ class JetiExBusTelemetry: public JetiTelemetry {
     FrameRequestResult isLastFrameValid(const uint8_t *buffer, uint8_t nb_chars, uint8_t len, uint8_t request);
     const uart_port_t uartPort = UART_NUM_1;
     uint8_t rxBuffer[RX_BUF_SIZE];
-    uint32_t lastMenuExitTS = 0;
     uint8_t exBusFrameTelemetryBuffer[40] = {
         0x3B, // Answer header
         0x01, // Answer header
@@ -143,10 +144,10 @@ class JetiExBusTelemetry: public JetiTelemetry {
         0x00, // sub-length (will be computed later on)
         0x9f, // Teletry (anything that ends in 0xf)
         0x00, // will be computed for frame type + length
-        0x11, // manufactor ID LSB
-        0xA4, // manufactor ID MSB
-        0xca, // Device ID LSB
-        0xfe, // Device ID MSB
+        JETI_DEVICE_MANUFACTOR_LSB, // Manufactor ID LSB
+        JETI_DEVICE_MANUFACTOR_MSB, // Manufactor ID MSB
+        JETI_DEVICE_DEVICE_LSB,     // Device ID LSB
+        JETI_DEVICE_DEVICE_MSB,     // Device ID MSB
         0x00  // Always 0
     };
     uint8_t exBusFrameJetiBoxMenuBuffer[40] = {
