@@ -136,8 +136,8 @@ void Beacon::computeAndSendBeaconIfNeeded() {
 
     ESP_LOGI(TAG, "%.1fs Send beacon: (cause: %s) with %.1fm Speed=%.1f",
         time_elapsed, droneID->has_pass_distance() ? "Distance" : "Time",
-        droneID->get_distance_from_last_position_sent(),
-        droneID->get_ground_speed_kmh());
+        (float) droneID->get_distance_from_last_position_sent(),
+        (float) droneID->get_ground_speed_kmh());
     if (switches->enabled()) {
       computeID();
     }
@@ -164,10 +164,10 @@ BeaconState Beacon::getState() {
 void Beacon::handleData() {
   switch (getState()) {
     case NO_GPS:
-      ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %.2lf, time: %02d:%02d:%02d",
+      ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %.2f, time: %02d:%02d:%02d",
           gpsSec++,
           gps->satellites.value(),
-          gps->hdop.hdop(),
+          (float) gps->hdop.hdop(),
           gps->time.hour(),
           gps->time.minute(),
           gps->time.second());
@@ -217,9 +217,9 @@ void Beacon::handleData() {
     gps->time.hour(),
     gps->time.minute(),
     gps->time.second(),
-    gps->location.lng(),
-    gps->location.lat(),
+    (float) gps->location.lng(),
+    (float) gps->location.lat(),
     gps->satellites.value(),
-    gps->hdop.hdop());
+    (float) gps->hdop.hdop());
   computeAndSendBeaconIfNeeded();
 }
