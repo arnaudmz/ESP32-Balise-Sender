@@ -20,3 +20,5 @@ erase_nvs:
 
 # to flash config: esptool.py --before default_reset --after hard_reset --chip esp32  write_flash 0x9000 bin/Config-DEFAULT-0000.bin
 # to flash bootloader + partition table + application: esptool.py --chip esp32 -p /dev/ttyUSB0 -b 921600 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 40m --flash_size 4MB 0x8000 partition_table/partition-table.bin 0x1000 bootloader/bootloader.bin 0x10000 ESP32-Balise-Sender.bin
+# to build a NVS-only DFU stuff: $IDF_PATH/tools/mkdfu.py write -o plop 0x9000 bin/Config-MOCK-1111.bin --pid 2
+# to dfu a single DFU stuff (built previously): dfu-util -d 303a:2 -D plop
