@@ -129,6 +129,7 @@ void normal_run(void) {
   }
 }
 
+#ifdef CONFIG_IDF_TARGET_ESP32
 void ble_serve(Config *config, LED *led);
 
 void maintenance_run(void) {
@@ -137,14 +138,20 @@ void maintenance_run(void) {
   LED led;
   ble_serve(&config, &led);
 }
+#endif
 
 extern "C" void app_main(void) {
+#ifdef CONFIG_IDF_TARGET_ESP32
   bool is_maintenance = (gpio_get_level((gpio_num_t)3) == 0);
   if (is_maintenance) {
     ESP_LOGI(TAG, "Starting in maintenance mode");
     maintenance_run();
   } else {
+#else
     ESP_LOGI(TAG, "Starting in normal mode");
     normal_run();
+#endif
+#ifdef CONFIG_IDF_TARGET_ESP32
   }
+#endif
 }

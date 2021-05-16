@@ -67,7 +67,11 @@ class GPSUARTCnx: public GPSCnx {
     GPSUARTCnx(Config *config, TinyGPSPlus *gps): GPSCnx(config, gps) {}
     virtual uint32_t waitForChars(int first_timeout_ms = 1000, int next_timeout_ms = 20, bool inject = true);
   protected:
+#ifdef IDF_TARGET_ESP32
     const uart_port_t uartPort = UART_NUM_2;
+#else
+    const uart_port_t uartPort = UART_NUM_0;
+#endif
     void uartSendNMEA(const char *st);
     void uartWaitForSilence(int timeout_ms = 30);
 };
