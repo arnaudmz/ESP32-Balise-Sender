@@ -37,7 +37,6 @@ class LED {
     void toggleFade();
     void blinkFastForever();
   private:
-    void ulp_start(uint32_t *func_addr);
     bool fade_state;
 };
 

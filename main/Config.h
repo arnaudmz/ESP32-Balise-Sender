@@ -28,7 +28,8 @@ enum GPSModel {
   GPS_MODEL_L80R,
   GPS_MODEL_BN_220,
   GPS_MODEL_L96_UART,
-  GPS_MODEL_AT6558
+  GPS_MODEL_AT6558,
+  GPS_MODEL_MAX
 };
 
 enum TelemetryMode {
@@ -89,6 +90,7 @@ class Config {
     esp_err_t setStrValue(const char *name, const char *value, int len);
     esp_err_t setU8Value(const char *name, uint8_t value);
     esp_err_t resetValue(const char *name);
+    void initSuffixFromMac();
     GPSModel model;
     uint8_t GPSSatThrs, GPSHDOPThrs;
     bool switchesEnabled;

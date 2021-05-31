@@ -39,7 +39,6 @@ static constexpr char TAG[] = "BLEConfig";
 
 #include "Config.h"
 #include "LED.h"
-#ifdef CONFIG_IDF_TARGET_ESP32
 
 #define PROFILE_NUM                 1
 #define PROFILE_APP_IDX             0
@@ -320,11 +319,13 @@ void handle_write(uint16_t handle, uint8_t *value, uint16_t len) {
     if (len != Config::BUILDER_LENGTH) {
       ESP_LOGD(TAG, "Reset Builder to factory setting");
       my_config->resetBuilder();
+      ESP_ERROR_CHECK( esp_ble_gatts_set_attr_value(handle, Config::BUILDER_LENGTH, (const uint8_t *) my_config->getBuilder()) );
     } else {
       if (check_data_are_chars(value, len)) {
         ESP_LOGD(TAG, "Builder written");
         my_config->setBuilder(value);
       } else {
+        ESP_ERROR_CHECK( esp_ble_gatts_set_attr_value(handle, Config::BUILDER_LENGTH, (const uint8_t *) my_config->getBuilder()) );
         ESP_LOGD(TAG, "Builder not updated, contains invalid chars");
       }
     }
@@ -332,11 +333,13 @@ void handle_write(uint16_t handle, uint8_t *value, uint16_t len) {
     if (len != Config::VERSION_LENGTH) {
       ESP_LOGD(TAG, "Reset Version to factory setting");
       my_config->resetVersion();
+      ESP_ERROR_CHECK( esp_ble_gatts_set_attr_value(handle, Config::VERSION_LENGTH, (const uint8_t *) my_config->getVersion()) );
     } else {
       if (check_data_are_chars(value, len)) {
         ESP_LOGD(TAG, "Version written");
         my_config->setVersion(value);
       } else {
+        ESP_ERROR_CHECK( esp_ble_gatts_set_attr_value(handle, Config::VERSION_LENGTH, (const uint8_t *) my_config->getVersion()) );
         ESP_LOGD(TAG, "Version not updated, contains invalid chars");
       }
     }
@@ -356,11 +359,13 @@ void handle_write(uint16_t handle, uint8_t *value, uint16_t len) {
     if (len != Config::SUFFIX_LENGTH) {
       ESP_LOGD(TAG, "Reset Suffix to factory setting");
       my_config->resetSuffix();
+      ESP_ERROR_CHECK( esp_ble_gatts_set_attr_value(handle, Config::SUFFIX_LENGTH, (const uint8_t *) my_config->getSuffix()) );
     } else {
       if (check_data_are_chars(value, len)) {
         ESP_LOGD(TAG, "Suffix written");
         my_config->setSuffix(value);
       } else {
+        ESP_ERROR_CHECK( esp_ble_gatts_set_attr_value(handle, Config::SUFFIX_LENGTH, (const uint8_t *) my_config->getSuffix()) );
         ESP_LOGD(TAG, "Suffix not updated, contains invalid chars");
       }
     }
@@ -377,9 +382,11 @@ void handle_write(uint16_t handle, uint8_t *value, uint16_t len) {
       }
     }
   } else if (handle == handle_table[IDX_GPS_MODEL_VAL]) {
-    if(*value > GPS_MODEL_L96_UART) {
+    if(len == 0 || *value >= GPS_MODEL_MAX) {
       ESP_LOGD(TAG, "Reset Model to factory setting");
       my_config->resetGPSModel();
+      uint8_t m = (uint8_t) my_config->getGPSModel();
+      ESP_ERROR_CHECK( esp_ble_gatts_set_attr_value(handle, 1, &m) );
     } else {
         ESP_LOGD(TAG, "Model written");
       my_config->setGPSModel((GPSModel) *value);
@@ -519,4 +526,3 @@ void ble_serve(Config *config, LED *led) {
   ESP_ERROR_CHECK( esp_ble_gatts_app_register(ESP_APP_ID) );
   ESP_ERROR_CHECK( esp_ble_gatt_set_local_mtu(500) );
 }
-#endif

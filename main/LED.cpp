@@ -19,7 +19,17 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "LED.h"
+#ifdef CONFIG_IDF_TARGET_ESP32
 #include "esp32/ulp.h"
+#else
+#include "esp32s2/ulp.h"
+//#include "esp32s2/ulp_riscv.h"
+// Waiting for the C++ compatible headers
+extern "C" {
+  esp_err_t ulp_riscv_run(void);
+  esp_err_t ulp_riscv_load_binary(const uint8_t* program_binary, size_t program_size_bytes);
+}
+#endif
 #include "ulp_main.h"
 #include "driver/rtc_io.h"
 
@@ -31,17 +41,17 @@ static constexpr char TAG[] = "Led";
 
 extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
-extern uint32_t ulp_cmd;
 
 LED::LED(): fade_state(false) {
   rtc_gpio_init(GPIO_NUM_2);
   rtc_gpio_set_direction(GPIO_NUM_2, RTC_GPIO_MODE_OUTPUT_ONLY);
+#ifdef CONFIG_IDF_TARGET_ESP32
   ESP_ERROR_CHECK( ulp_load_binary(0, bin_start,(bin_end - bin_start) / sizeof(uint32_t)) );
-  ulp_start(&ulp_entry);
-}
-
-void LED::ulp_start(uint32_t *func_addr) {
-  ESP_ERROR_CHECK( ulp_run(func_addr - RTC_SLOW_MEM) );
+  ESP_ERROR_CHECK( ulp_run(&ulp_entry - RTC_SLOW_MEM) );
+#else
+  ESP_ERROR_CHECK( ulp_riscv_load_binary(bin_start, (bin_end - bin_start)) );
+  ESP_ERROR_CHECK( ulp_riscv_run() );
+#endif
 }
 
 void LED::blinkOnce() {

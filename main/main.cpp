@@ -147,10 +147,9 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Starting in maintenance mode");
     maintenance_run();
   } else {
-#else
+#endif
     ESP_LOGI(TAG, "Starting in normal mode");
     normal_run();
-#endif
 #ifdef CONFIG_IDF_TARGET_ESP32
   }
 #endif

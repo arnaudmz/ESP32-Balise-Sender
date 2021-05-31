@@ -19,6 +19,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "Config.h"
+#include "esp_system.h"
 #include "esp_ota_ops.h"
 #include "esp_wifi.h"
 #include "driver/gpio.h"
@@ -58,10 +59,9 @@ idPrefix(""),
 idSuffix(""),
 telemetry("") {
   nvs_flash_init();
-  ESP_ERROR_CHECK( esp_read_mac(macAddr, ESP_MAC_WIFI_STA) );
+  initSuffixFromMac();
   nvs_handle_t my_nvs_handle;
   esp_err_t err;
-  snprintf(idSuffix, 13, "%02X%02X%02X%02X%02X%02X", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
   err = nvs_open(NVS_HANDLE_NAME, NVS_READONLY, &my_nvs_handle);
   if (err != ESP_OK) {
     ESP_LOGI(TAG, "No config in NVS (%s), using factory settings", esp_err_to_name(err));
@@ -76,6 +76,11 @@ telemetry("") {
     getU8(my_nvs_handle, GPS_HDOP_THRS_NVS_NAME, &GPSHDOPThrs);
   }
   snprintf(ssid, 32, "%3s_%12s", idBuilder, idSuffix);
+}
+
+void Config::initSuffixFromMac() {
+  ESP_ERROR_CHECK( esp_read_mac(macAddr, ESP_MAC_WIFI_STA) );
+  snprintf(idSuffix, 13, "%02X%02X%02X%02X%02X%02X", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
 }
 
 esp_err_t Config::getU8(nvs_handle_t h, const char*name, uint8_t *value) {
@@ -218,6 +223,8 @@ void Config::printConfig() {
     case GPS_MODEL_AT6558:
       ESP_LOGI(TAG, "GPS Model: AT6558 (UART)");
       break;
+    default:
+      break;
   }
   ESP_LOGI(TAG, "Min GPS Sattelites Count Threshold to set home position: %d", getGPSSatThrs());
   ESP_LOGI(TAG, "Max GPS HDOP Threshold to set home position: %d", getGPSHDOPThrs());
@@ -290,10 +297,12 @@ esp_err_t Config::setTelemetryMode(const uint8_t *newTelemetryMode) {
 }
 
 esp_err_t Config::resetBuilder() {
+  strncpy(idBuilder, CONFIG_BEACON_ID_BUILDER, BUILDER_LENGTH + 1);
   return resetValue(BUILDER_NVS_NAME);
 }
 
 esp_err_t Config::resetVersion() {
+  strncpy(idVersion, CONFIG_BEACON_ID_VERSION, VERSION_LENGTH + 1);
   return resetValue(VERSION_NVS_NAME);
 }
 
@@ -302,10 +311,12 @@ esp_err_t Config::resetPrefix() {
 }
 
 esp_err_t Config::resetSuffix() {
+  initSuffixFromMac();
   return resetValue(SUFFIX_NVS_NAME);
 }
 
 esp_err_t Config::resetGPSModel() {
+  model = GPS_MODEL_L80R;
   return resetValue(GPS_MODEL_NVS_NAME);
 }
 
