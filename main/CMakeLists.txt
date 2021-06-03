@@ -5,6 +5,7 @@
 set(COMPONENT_ADD_INCLUDEDIRS "")
 set(COMPONENT_SRCS "main.cpp" "Config.cpp" "Beacon.cpp" "Switches.cpp" "TinyGPS++.cpp" "GPSCnx.cpp" "LED.cpp" "SPort.cpp" "Jeti.cpp" "JetiScreen.cpp")
 #set(COMPONENT_REQUIRES soc nvs_flash ulp driver app_update)
+set(COMPONENT_REQUIRES freertos soc nvs_flash ulp driver app_update tinyusb)
 #set(EXCLUDE_COMPONENTS wpa_supplicant coap asio lwip)
 
 if(CONFIG_IDF_TARGET_ESP32)
@@ -13,6 +14,9 @@ if(CONFIG_IDF_TARGET_ESP32)
   set(ulp_sources ../ulp/led.S)
 elseif(CONFIG_IDF_TARGET_ESP32S2)
   set(ulp_sources ../ulp_riscv/main.c)
+  if(CONFIG_USB_MSC_ENABLED)
+    list(APPEND COMPONENT_SRCS "msc_disk.cpp")
+  endif()
 endif()
 
 register_component()

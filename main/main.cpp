@@ -32,6 +32,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "SPort.h"
 #include "Jeti.h"
 #include "droneID_FR.h"
+#if defined(CONFIG_IDF_TARGET_ESP32S2) && defined(CONFIG_USB_CDC_ENABLED)
+#include "tinyusb.h"
+#include "tusb_cdc_acm.h"
+#include "tusb_console.h"
+#endif
 
 //#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 //#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
@@ -147,6 +152,14 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Starting in maintenance mode");
     maintenance_run();
   } else {
+#else
+#if defined(CONFIG_IDF_TARGET_ESP32S2) && defined(CONFIG_USB_CDC_ENABLED)
+  tinyusb_config_t tusb_cfg = { 0 }; // the configuration uses default values
+  ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
+  tinyusb_config_cdcacm_t amc_cfg = { }; // the configuration uses default values
+  ESP_ERROR_CHECK(tusb_cdc_acm_init(&amc_cfg));
+  esp_tusb_init_console(TINYUSB_CDC_ACM_0); // log to usb
+#endif
 #endif
     ESP_LOGI(TAG, "Starting in normal mode");
     normal_run();
