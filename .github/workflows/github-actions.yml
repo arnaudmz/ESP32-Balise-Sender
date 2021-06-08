@@ -1,0 +1,64 @@
+---
+name: Generate Release
+on:
+  push:
+    tags:
+      - v*.*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the tag
+        id: vars
+        shell: bash
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/tags/}
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: Prepare env for ESP32 build
+        run: cp sdkconfig.defaults.esp32 sdkconfig
+      - name: build artifacts for ESP32
+        uses: docker://espressif/idf:v4.2.1
+        with:
+          args: idf.py -B build_esp32 build
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.vars.outputs.tag }}
+          draft: false
+          prerelease: true
+      - name: Upload Release Asset ESP32 App bin
+        id: upload-release-asset-app
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build_esp32/ESP32-Balise-Sender.bin
+          asset_name: ESP32-Balise-Sender-${{ steps.vars.outputs.tag }}.bin
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset ESP32 Partition bin
+        id: upload-release-asset-partition
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build_esp32/partition_table/partition-table.bin
+          asset_name: ESP32-partition-table-${{ steps.vars.outputs.tag }}.bin
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset ESP32 Bootloader bin
+        id: upload-release-asset-bootloader
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build_esp32/bootloader/bootloader.bin
+          asset_name: ESP32-bootloader-${{ steps.vars.outputs.tag }}.bin
+          asset_content_type: application/octet-stream
+
