@@ -1,0 +1,95 @@
+---
+name: plop
+on:
+  push:
+    tags:
+      - v*.*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: Prepare env for ESP32 build
+        run: cp sdkconfig.defaults.esp32 sdkconfig
+      - name: build artifacts for ESP32
+        uses: docker://espressif/idf:v4.2.1
+        with:
+          args: idf.py -B build_esp32 build
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: true
+      - name: Upload Release Asset ESP32 App bin
+        id: upload-release-asset-app
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build_esp32/ESP32-Balise-Sender.bin
+          asset_name: ESP32-Balise-Sender-${{ github.ref }}.bin
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset ESP32 Partition bin
+        id: upload-release-asset-partition
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build_esp32/partition_table/partition-table.bin
+          asset_name: ESP32-partition-table-${{ github.ref }}.bin
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset ESP32 Bootloader bin
+        id: upload-release-asset-bootloader
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build_esp32/bootloader/bootloader.bin
+          asset_name: ESP32-bootloader-${{ github.ref }}.bin
+          asset_content_type: application/octet-stream
+
+#        run: cp sdkconfig.defaults.esp32 sdkconfig
+#      - name: build_esp32
+#        uses: espressif/idf@fe065ca8d3e3e48c4882dac6d5328639802c69d2938d41b10d0a101dcaf61182
+#        with:
+#          args: idf.py -B build_esp32 build
+#      - uses: actions/upload-artifact@v2
+#        with:
+#          name: esp32-bins
+#          path: |
+#            build/ESP32-Balise-Sender.bin
+#            build/partition_table/partition-table.bin
+#            build/bootloader/bootloader.bin
+#  release:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Create Release
+#        id: create_release
+#        uses: actions/create-release@v1
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          tag_name: ${{ github.ref }}
+#          release_name: Release ${{ github.ref }}
+#          draft: false
+#          prerelease: true
+#      - name: Upload Release Asset ESP32 App bin
+#        id: upload-release-asset-app
+#        uses: actions/upload-release-asset@v1
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          upload_url: ${{ steps.create_release.outputs.upload_url }}
+#          asset_path: ./build/ESP32-Balise-Sender.bin
+#          asset_name: build/ESP32-Balise-Sender.bin
+
