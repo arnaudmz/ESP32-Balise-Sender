@@ -1,4 +1,5 @@
 // vim:et:sts=2:sw=2:si
+#include <byteswap.h>
 #include <esp_wifi.h>
 #include <esp_event_loop.h>
 #include <nvs_flash.h>
@@ -11,11 +12,23 @@
 #include "Free_Fonts.h"
 #include "Button2.h"
 
-
 #define ADC_EN              14  //ADC_EN is the ADC detection enable port
 #define ADC_PIN             34
 #define BUTTON_1            35
 #define BUTTON_2            0
+#define OUI_VER 0x01355C6A
+
+#define B_VERSION 0x01
+#define B_IDENT_FR 0x02
+#define B_IDENT_ANSI 0x03
+#define B_CUR_LAT 0x04
+#define B_CUR_LON 0x05
+#define B_CUR_ALT 0x06
+#define B_CUR_HAU 0x07
+#define B_STA_LAT 0x08
+#define B_STA_LON 0x09
+#define B_CUR_VIT 0x0A
+#define B_CUR_DIR 0x0B
 
 String trame;
 TFT_eSPI tft = TFT_eSPI(135, 240);
@@ -56,6 +69,29 @@ enum DATA_TYPE: uint8_t {
   NOT_DEFINED_END = 12,
 };
 
+typedef struct {
+  uint8_t type;       /**<  */
+  uint8_t length;       /**<  */
+  uint8_t payload[];      /**<  */
+} __attribute((__packed__)) TLV_t;
+
+typedef struct {
+  uint8_t subtype;              /**<  Frame subtype*/
+  uint8_t type;               /**<  Frame typa*/
+  uint16_t duration;              /**<  */
+  uint8_t receiver_address[6];        /**<  Receiver mac-address*/
+  uint8_t transmitter_address[6];       /**<  Transmitter mac-address*/
+  uint8_t BSS_Id[6];              /**<  */
+  uint16_t sequence_frag;           /**< 4 bits LSB frag, 12 bits MSB sequence sequence_frag = (0x000F & (frag)) | ( 0x0FFF & sequence<<4) */
+  uint64_t timestamp;             /**<  Timestamp of frame*/
+  uint16_t beacon_interval;         /** Interval between beacon frame */
+  uint16_t capability;            /**mandatory fields */  
+  uint8_t ssid_element_id;          /** SSID Element ID */
+  uint8_t ssid_length;            /** SSID length */
+  uint8_t ssid_value[]; /** SSID value*/
+
+} __attribute((__packed__)) frame_header_t;
+
 /**
   * Tableau TLV (TYPE, LENGTH, VALUE) avec les tailles attendu des différents type données.
 ***/
@@ -74,22 +110,6 @@ static constexpr uint8_t TLV_LENGTH[] {
   2,  // [DATA_TYPE::HEADING]
 };
 
-
-typedef struct  {
-  int16_t fctl;
-  int16_t duration;
-  uint8_t da;
-  uint8_t sa;
-  uint8_t bssid;
-  int16_t seqctl;
-  unsigned char payload[];
-} __attribute__((packed)) WifiMgmtHdr;
-
-typedef struct {
-  WifiMgmtHdr hdr;
-  uint8_t payload[0];
-} wifi_ieee80211_packet_t;
-
 typedef struct {
   char ID[31];
   double lat;
@@ -102,10 +122,7 @@ typedef struct {
   double dep_lat;
   double dep_lon;
   uint32_t ts;
-  char addr1[19]; /* receiver address */
-  char addr2[19]; /* sender address */
-  char addr3[19]; /* filtering address */
-  char ssid[32];
+  char addr[19];
 } beacon_data_t;
 
 beacon_data_t bdt;
@@ -135,164 +152,121 @@ void wifi_sniffer_init(void) {
 }
 
 
-// Function to extract MAC addr from a packet at given offset
 void getMAC(char *addr, uint8_t* data, uint16_t offset) {
   sprintf(addr, "%02X:%02X:%02X:%02X:%02X:%02X", data[offset+0], data[offset+1], data[offset+2], data[offset+3], data[offset+4], data[offset+5]);
 }
 
-static int convertToInt(uint16_t start, int len, uint16_t size, uint8_t* data) {
-  uint8_t count = size-1;
-  int data_value = 0;
-  bool neg_number = data[start] > 0x7F;
+static void beaconCallback(void *recv_buf, wifi_promiscuous_pkt_type_t type) {
 
-  for(uint16_t i = start; i < len && i < start+size; i++) {
-    data_value +=  (data[i]) << (8 * count);
-    count--;
-  }
+  static int32_t *oui_ver;
+  static int32_t index, ptr, i;
+  static int16_t i_value;
+  static uint8_t *hex;
+  static int8_t s_value;
 
-  if(neg_number) {
-    data_value = (0xFFFF & ~data_value) + 1;
-    data_value *= -1;
-  }
-  return data_value;
-}
+  static wifi_promiscuous_pkt_t *sniffer;
+  static TLV_t *tlv, *b_tlv;
+  static vendor_ie_data_t *gse_vendor;
+  static frame_header_t *packet;
+  static float f_value;
 
-static void printDataSpan(uint16_t start, int len, uint16_t size, uint8_t* data) {
-  for(uint16_t i = start; i < len && i < start+size; i++) {
-    Serial.write(data[i]);
-    trame = trame + char(data[i]);
-  }
-}
+  sniffer = (wifi_promiscuous_pkt_t *)recv_buf;
 
-static double printCoordinates(uint16_t start, int len, uint16_t size, uint8_t* data) {
-  uint8_t count = size-1;
-  int data_value = 0;
-  //Serial.print(" data_value="); Serial.print(data_value); Serial.print(" neg=");
-  bool neg_number = data[start] > 0x7F;
-  //Serial.print(neg_number);Serial.print(" ");
-
-  for(uint16_t i = start; i < len && i < start+size; i++) {
-    //Serial.print(count); Serial.print("-");
-    data_value +=  (data[i]) << (8 * count);
-    count--;
-  }
-
-  if(neg_number) {
-    data_value = (0xFFFFFFFF & ~data_value) + 1;
-    data_value *= -1;
-  }
-  double val = double(data_value) * 0.00001;
-  Serial.print(val, 5);
-  trame += String(val, 5);
-  return val;
-}
-
-static void printAltitude(uint16_t start, int len, uint16_t size, uint8_t* data) {
-  uint8_t count = size-1;
-  int data_value = 0;
-  bool neg_number = data[start] > 0x7F;
-  //Serial.print(neg_number);Serial.print(" ");
-
-  for(uint16_t i = start; i < len && i < start+size; i++) {
-    //Serial.print(count); Serial.print("-");
-    data_value +=  (data[i]) << (8 * count);
-    count--;
-  }
-
-  if(neg_number) {
-    data_value = (0xFFFF & ~data_value) + 1;
-    data_value *= -1;
-  }
-
-  Serial.print(data_value);
-  trame = trame + String(data_value);
-}
-
-void beaconCallback(void* buf, wifi_promiscuous_pkt_type_t type)
-{
-  wifi_promiscuous_pkt_t *snifferPacket = (wifi_promiscuous_pkt_t*)buf;
-  WifiMgmtHdr *frameControl = (WifiMgmtHdr*)snifferPacket->payload;
-  wifi_pkt_rx_ctrl_t ctrl = (wifi_pkt_rx_ctrl_t)snifferPacket->rx_ctrl;
-  int len = snifferPacket->rx_ctrl.sig_len;
-  uint8_t SSID_length = (int)snifferPacket->payload[40];
-  uint8_t offset_OUI = 42 + SSID_length;
-  //Organizationally Unique Identifier = 6A:5C:35 = Secrétariat général de la défense et de la sécurité nationale
-  const uint8_t FRAME_OUI[3] = {0x6A, 0x5C, 0x35};
-
-  //Filter OUI from 6A:5C:35
-  if(snifferPacket->payload[offset_OUI+1] != FRAME_OUI[0] && snifferPacket->payload[offset_OUI+2] != FRAME_OUI[1] && snifferPacket->payload[offset_OUI+3] != FRAME_OUI[2])
-  return;
-
-  len -= 4;
-  int fctl = ntohs(frameControl->fctl);
-  const wifi_ieee80211_packet_t *ipkt = (wifi_ieee80211_packet_t *)snifferPacket->payload;
-  const WifiMgmtHdr *hdr = &ipkt->hdr;
-
-  // If we dont the buffer size is not 0, don't write or else we get CORRUPT_HEAP
-  if (snifferPacket->payload[0] == 0x80)
+  if ((*(uint16_t *)sniffer->payload) == 0x0080) //beacon frame
   {
-    memcpy(bdt.ssid, &snifferPacket->payload[41], SSID_length);
-    bdt.ssid[SSID_length] = 0;
-    Serial.print("SSID: "); Serial.print(bdt.ssid);
-    getMAC(bdt.addr1, snifferPacket->payload, 4);
-    Serial.print(" target MAC: "); Serial.print(bdt.addr1);
-    getMAC(bdt.addr2, snifferPacket->payload, 10);
-    Serial.print(" source MAC: "); Serial.print(bdt.addr2);
-    getMAC(bdt.addr3, snifferPacket->payload, 16);
-    Serial.print(" filter MAC: "); Serial.print(bdt.addr3);
-    Serial.print(" len: ");Serial.print(len, DEC);
-    // ID balise
-    trame += "ID=";
-    Serial.print(" ID: ");  printDataSpan(offset_OUI+4+6, len, TLV_LENGTH[ID_FR] , snifferPacket->payload);
-    memcpy(&bdt.ID, &snifferPacket->payload[offset_OUI+4+6], TLV_LENGTH[ID_FR]);
-    bdt.ID[30] = '\0';
- 
-    uint16_t offset = offset_OUI+4+6+TLV_LENGTH[ID_FR]+2; // +2 : Type + Length
-    // Latitude
-    trame += " lat=";
-    Serial.print(" LAT: ");
-    bdt.lat = printCoordinates(offset, len, TLV_LENGTH[HOME_LATITUDE] , snifferPacket->payload);
-    offset += TLV_LENGTH[LATITUDE]+2;
-    // Longitude
-    trame += " long=";
-    Serial.print(" LON: ");
-    bdt.lon = printCoordinates(offset, len, TLV_LENGTH[HOME_LONGITUDE] , snifferPacket->payload);
-    offset += TLV_LENGTH[LONGITUDE]+2;
-    //Altitude msl
-    trame += " alt=";
-    bdt.alt = convertToInt(offset, len, TLV_LENGTH[ALTITUDE] , snifferPacket->payload);
-    Serial.print(" ALT ABS: "); printAltitude(offset, len, TLV_LENGTH[ALTITUDE] , snifferPacket->payload);
-    offset += TLV_LENGTH[ALTITUDE]+2;
-    //home altitude
-    trame += " Hauteur=";
-    bdt.height = convertToInt(offset, len, TLV_LENGTH[HEIGHT] , snifferPacket->payload);
-    Serial.print(" HAUTEUR: "); printAltitude(offset, len, TLV_LENGTH[HEIGHT] , snifferPacket->payload);
-    offset += TLV_LENGTH[HEIGHT]+2;
-    //home latitude
-    trame += " lat dep=";
-    Serial.print(" LAT DEP: ");
-    bdt.dep_lat = printCoordinates(offset, len, TLV_LENGTH[HOME_LATITUDE] , snifferPacket->payload);
-    offset += TLV_LENGTH[HOME_LATITUDE]+2;
-    //home longitude
-    trame += " long dep=";
-    Serial.print(" LON DEP: ");
-    bdt.dep_lon = printCoordinates(offset, len, TLV_LENGTH[HOME_LONGITUDE] , snifferPacket->payload);
-    offset += TLV_LENGTH[HOME_LATITUDE]+2;
-    //ground speed
-    trame += " Vitesse=";
-    bdt.speed = convertToInt(offset, len, TLV_LENGTH[GROUND_SPEED], snifferPacket->payload);
-    Serial.print(" VITESSE HOR: "); printAltitude(offset, len, TLV_LENGTH[GROUND_SPEED] , snifferPacket->payload);
-    offset += TLV_LENGTH[GROUND_SPEED]+2;
-    //heading
-    trame += " Dir=";
-    bdt.hdg = convertToInt(offset, len, TLV_LENGTH[HEADING] , snifferPacket->payload);
-    Serial.print(" DIR: "); printAltitude(offset, len, TLV_LENGTH[HEADING] , snifferPacket->payload);
-    trame="";
-    Serial.print("RSSI: ");
-    Serial.println(snifferPacket->rx_ctrl.rssi);
-    bdt.rssi = snifferPacket->rx_ctrl.rssi;
-    bdt.ts = millis();
-    armDisplay();
+    packet = (frame_header_t*) sniffer->payload;
+    index = sizeof(*packet) + packet->ssid_length;
+    while (index < (sniffer->rx_ctrl.sig_len - 4))
+    {
+      tlv = (TLV_t*)((sniffer->payload) + index);
+      //WIFI_VENDOR_IE_ELEMENT_ID  ???
+      if (tlv->type == 0xDD)
+      {
+        oui_ver = (int32_t*) tlv->payload;
+        if ( *oui_ver == OUI_VER) {
+          gse_vendor = (vendor_ie_data_t*)(tlv);
+          ptr = 0;
+          while (ptr < (gse_vendor->length - 4))
+          {
+            b_tlv = (TLV_t*)((gse_vendor->payload) + ptr);
+            switch (b_tlv->type)
+            {
+              case B_IDENT_FR :
+                memcpy(bdt.ID, b_tlv->payload, b_tlv->length);
+                bdt.ID[b_tlv->length + 1] = '\0';
+                break;
+              case B_CUR_LAT :
+                f_value = (float)((signed)(__bswap_32(*(int32_t*)(b_tlv->payload)))) / 100000.0;
+                bdt.lat = f_value;
+                break;
+              case B_CUR_LON :
+                f_value = (float)((signed)(__bswap_32(*(int32_t*)(b_tlv->payload)))) / 100000.0;
+                bdt.lon = f_value;
+                break;
+              case B_CUR_ALT :
+                i_value = __bswap_16(*(int16_t*)(b_tlv->payload));
+                bdt.alt = i_value;
+                break;
+              case B_CUR_HAU :
+                i_value = __bswap_16(*(int16_t*)(b_tlv->payload));
+                bdt.height = i_value;
+                break;
+              case B_STA_LAT :
+                f_value = (float)((signed)(__bswap_32(*(int32_t*)(b_tlv->payload)))) / 100000.0;
+                bdt.dep_lat = f_value;
+                break;
+              case B_STA_LON :
+                f_value = (float)((signed)(__bswap_32(*(int32_t*)(b_tlv->payload)))) / 100000.0;
+                bdt.dep_lon = f_value;
+                break;
+              case B_CUR_VIT :
+                s_value = *(b_tlv->payload);
+                bdt.speed = s_value;
+                break;
+              case B_CUR_DIR :
+                i_value = __bswap_16(*(int16_t*)(b_tlv->payload));
+                bdt.hdg = i_value;
+                break;
+              default:
+                break;
+            }
+            ptr = ptr + (b_tlv->length) + 2;
+          }
+
+          bdt.rssi = sniffer->rx_ctrl.rssi;
+          getMAC(bdt.addr, packet->transmitter_address, 0);
+          ////construire la trame dans l'ordre:
+          trame = "{\"id\": \"";
+          trame += bdt.ID;
+          trame += "\", \"lat\": ";
+          trame += String(bdt.lat, 5);
+          trame += ", \"long\": ";
+          trame += String(bdt.lon, 5);
+          trame += ", \"alt\": ";
+          trame += bdt.alt;
+          trame += ", \"height\": ";
+          trame += bdt.height;
+          trame += ", \"dep_lat\": ";
+          trame += String(bdt.dep_lat, 5);
+          trame += ", \"dep_long\": ";
+          trame += String(bdt.dep_lon, 5);
+          trame += ", \"speed\": ";
+          trame += bdt.speed;
+          trame += ", \"heading\": ";
+          trame += bdt.hdg;
+          trame += ", \"rssi\": ";
+          trame += String(bdt.rssi);
+          trame += ", \"source_mac\": \"";
+          trame += String(bdt.addr);
+          trame += "\"}";
+          Serial.println(trame);
+          trame = "";
+          bdt.ts = millis();
+          armDisplay();
+        }
+      }
+      index = index + tlv->length + 2;
+    }
   }
 }
 
@@ -331,11 +305,6 @@ void setup() {
     digitalWrite(TFT_BL, !r);
     tft.writecommand(TFT_DISPOFF);
     tft.writecommand(TFT_SLPIN);
-    //After using light sleep, you need to disable timer wake, because here use external IO port to wake up
-    //esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
-    // esp_sleep_enable_ext1_wakeup(GPIO_SEL_35, ESP_EXT1_WAKEUP_ALL_LOW);
-    //esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0);
-    //delay(200);
     digitalWrite(ADC_EN, LOW);
     digitalWrite(ADC_PIN, LOW);
     digitalWrite(TFT_CS, LOW);
@@ -358,7 +327,7 @@ void setup() {
     esp_deep_sleep_start();
   });
   esp_adc_cal_characteristics_t adc_chars;
-  esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);    //Check type of calibration value used to characterize ADC
+  esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, 1100, &adc_chars);
   if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
     vref = adc_chars.vref;
   }
@@ -390,7 +359,7 @@ void updateDisplay() {
       tft.fillScreen(TFT_BLACK);
       tft.setTextDatum(BL_DATUM);
       tft.setTextColor(TFT_CYAN, TFT_BLACK);
-      tft.drawString("Info Balises v0.1", 0, 135, 2);
+      tft.drawString("Info Balises v0.2", 0, 135, 2);
       sprintf(st, "%d/%d", page + 1, NB_PAGES);
       tft.setTextDatum(BR_DATUM);
       tft.drawString(st, 239, 135, 2);
@@ -510,15 +479,13 @@ void updateDisplay() {
             tft.setFreeFont(FF17);
             tft.drawString("RSSI", 0, 18 + y_offset);
             tft.drawString("MAC", 0, 42 + y_offset);
-            tft.drawString("SSID", 0, 66 + y_offset);
           }
           tft.setTextColor(TFT_GREEN, TFT_BLACK);
           tft.setFreeFont(FM9);
           tft.setTextDatum(R_BASELINE);
           sprintf(st, "%4d", bdt.rssi);
           tft.drawString(st, 239, 18 + y_offset);
-          tft.drawString(bdt.addr2, 239, 42 + y_offset);
-          tft.drawString(bdt.ssid, 239, 66 + y_offset);
+          tft.drawString(bdt.addr, 239, 42 + y_offset);
       }
       if (last_displayed_page != page) {
         last_displayed_page = page;
