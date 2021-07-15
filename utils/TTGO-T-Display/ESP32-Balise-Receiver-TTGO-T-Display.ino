@@ -359,7 +359,7 @@ void updateDisplay() {
       tft.fillScreen(TFT_BLACK);
       tft.setTextDatum(BL_DATUM);
       tft.setTextColor(TFT_CYAN, TFT_BLACK);
-      tft.drawString("Info Balises v0.2", 0, 135, 2);
+      tft.drawString("Info Balises v0.3", 0, 135, 2);
       sprintf(st, "%d/%d", page + 1, NB_PAGES);
       tft.setTextDatum(BR_DATUM);
       tft.drawString(st, 239, 135, 2);
@@ -465,7 +465,7 @@ void updateDisplay() {
           tft.setTextDatum(R_BASELINE);
           sprintf(st, "%.4f %c", abs(bdt.lat), bdt.lat < 0.0 ? 'S': 'N');
           tft.drawString(st, 239, 16 + y_offset);
-          sprintf(st,  "%3.4f %c", abs(bdt.lon), bdt.lat < 0.0 ? 'W': 'E');
+          sprintf(st,  "%3.4f %c", abs(bdt.lon), bdt.lon < 0.0 ? 'W': 'E');
           tft.drawString(st, 239, 35 + y_offset);
           sprintf(st, "%2.4f %c", abs(bdt.dep_lat), bdt.dep_lat < 0.0 ? 'S': 'N');
           tft.drawString(st, 239, 54 + y_offset);
