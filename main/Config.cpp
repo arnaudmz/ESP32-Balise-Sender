@@ -224,6 +224,9 @@ void Config::printConfig() {
     case GPS_MODEL_AT6558:
       ESP_LOGI(TAG, "GPS Model: AT6558 (UART)");
       break;
+    case GPS_MODEL_AT6558_ULP:
+      ESP_LOGI(TAG, "GPS Model: AT6558 (UART, ULP)");
+      break;
     default:
       break;
   }

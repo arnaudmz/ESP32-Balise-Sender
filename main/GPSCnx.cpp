@@ -25,6 +25,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "driver/gpio.h"
 #include "esp_sleep.h"
 #include "esp_log.h"
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
+#include "ulp_main.h"
+#endif
 
 static constexpr char TAG[] = "GPSCnx";
 
@@ -52,7 +55,7 @@ void GPSCnx::injectIfNeeded(uint32_t nb_chars, bool inject) {
     for(int i = 0; i < nb_chars; i++) {
       gps->encode(rxBuffer[i]);
     }
-    ESP_LOGV(TAG, "Injected %d chars", nb_chars);
+    ESP_LOGI(TAG, "Injected %d chars", nb_chars);
   } else {
     ESP_LOGV(TAG, "Dropped %d chars", nb_chars);
   }
@@ -141,6 +144,29 @@ GPSAT6558Cnx::GPSAT6558Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config,
   uartSendNMEA(pcas_limit_msg);
   uartSendNMEA(pcas_enable_all_gns);
   uartSendNMEA(pcas_save_to_flash); // not sure it actually works
+}
+
+GPSAT6558ULPCnx::GPSAT6558ULPCnx(Config *config, TinyGPSPlus *gps) : GPSAT6558Cnx(config, gps) {
+  uart_driver_delete(uartPort);
+  esp_sleep_enable_ulp_wakeup();
+}
+
+void GPSAT6558ULPCnx::lowPower(uint32_t delay_ms) {
+  esp_light_sleep_start();
+}
+
+uint32_t GPSAT6558ULPCnx::waitForChars(int first_timeout_ms, int next_timeout_ms, bool inject) {
+  uint32_t first_char_ts, nb_chars = 0;
+  first_char_ts = millis();
+  uint32_t *ptr = &ulp_rx_buf;
+  for (int i = 0; i < (ulp_rx_buf_len & 0xff) - 1; i++) {
+    if((ptr[i] & 0xff) != 0xd) {
+      rxBuffer[nb_chars++] = ptr[i] & 0xff;
+    }
+  }
+  rxBuffer[nb_chars] = '\0';
+  injectIfNeeded(nb_chars, inject);
+  return first_char_ts;
 }
 
 GPSPPSUARTCnx::GPSPPSUARTCnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, gps) {
