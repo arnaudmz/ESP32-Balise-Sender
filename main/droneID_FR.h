@@ -354,7 +354,7 @@ public:
         full_frame[start_from + count] = TLV_LENGTH[HEADING];
         count++;
         for (auto i = TLV_LENGTH[HEADING] - 1; i >= 0; i--) {
-            full_frame[start_from + count] = (get_2_complement(_heading) >> (8 * i)) & 0xFF;
+            full_frame[start_from + count] = (get_2_complement((int16_t) _heading) >> (8 * i)) & 0xFF;
             count++;
         }
         return count;

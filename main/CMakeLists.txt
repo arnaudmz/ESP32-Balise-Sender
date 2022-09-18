@@ -21,8 +21,9 @@ elseif(CONFIG_IDF_TARGET_ESP32S2)
 endif()
 
 register_component()
-
+if(NOT CONFIG_IDF_TARGET_ESP32C3)
 set(ulp_app_name ulp_${COMPONENT_NAME})
 set(ulp_exp_dep_srcs "LED.cpp")
 
 ulp_embed_binary(${ulp_app_name} "${ulp_sources}" "${ulp_exp_dep_srcs}")
+endif()

@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #ifndef __Jeti_h
 #define __Jeti_h
+#include "commons.h"
 #include "driver/gpio.h"
 #include "Config.h"
 #include "TinyGPS++.h"

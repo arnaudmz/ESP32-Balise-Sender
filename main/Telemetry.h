@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #ifndef __Telemetry_h
 #define __Telemetry_h
+#include "commons.h"
 class Telemetry {
   public:
     virtual void handle(uint32_t end_ts);

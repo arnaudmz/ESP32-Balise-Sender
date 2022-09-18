@@ -20,13 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include <cstring>
 #include "Beacon.h"
-
 #include "esp_wifi.h"
-
-//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
-static constexpr char TAG[] = "Beacon";
 #include "esp_log.h"
 #include "Config.h"
 #include "Switches.h"
@@ -34,6 +28,7 @@ static constexpr char TAG[] = "Beacon";
 #include "GPSCnx.h"
 #include "LED.h"
 #include "droneID_FR.h"
+static constexpr char TAG[] = "Beacon";
 
 #define WIFI_CHANNEL CONFIG_WIFI_CHANNEL
 

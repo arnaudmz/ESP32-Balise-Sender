@@ -24,15 +24,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <cmath>
 #include "driver/gpio.h"
 #include "esp_sleep.h"
-
-//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
-static constexpr char TAG[] = "SPort";
 #include "esp_log.h"
 
+static constexpr char TAG[] = "SPort";
+
 #define SPORT_BAUD_RATE 57600
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+#define RX_IO 10
+#else
 #define RX_IO 5
+#endif //ifdef CONFIG_IDF_TARGET_ESP32C3
 #define TX_IO 18
 #define uS_TO_mS_FACTOR 1000
 
@@ -62,7 +63,7 @@ beacon(beacon) {
     .stop_bits = UART_STOP_BITS_1,
     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
     .rx_flow_ctrl_thresh = 0,
-    .source_clk = UART_SCLK_REF_TICK,
+    .source_clk = UART_SOURCE,
   };
   // We won't use a buffer for sending data.
   ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
@@ -304,8 +305,13 @@ void SPort::handle(uint32_t end_ts) {
     int32_t remaining_ms = 7 - (millis() - first_telem_char_ts);
     if (remaining_ms > 0) {
       ESP_LOGD(TAG, "I can sleep for %d ms, before next telem frame", remaining_ms);
+#ifdef CONFIG_IDF_TARGET_ESP32
+      ESP_LOGI(TAG, "I can LIGHT sleep for %d ms, before next telem frame", remaining_ms);
       esp_sleep_enable_timer_wakeup(remaining_ms * uS_TO_mS_FACTOR);
       esp_light_sleep_start();
+#else // ESP32S2 and C3 don't sleep, as It will break USB
+      vTaskDelay(pdMS_TO_TICKS(remaining_ms));
+#endif
     }
   }
 }

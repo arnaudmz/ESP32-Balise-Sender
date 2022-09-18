@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #ifndef __Config_h
 #define __Config_h
+#include "commons.h"
 #include "nvs.h"
 #include "driver/gpio.h"
 

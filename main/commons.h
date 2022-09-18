@@ -18,23 +18,15 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef __Switches_h
-#define __Switches_h
-#include "commons.h"
-#include "driver/gpio.h"
-#include "Config.h"
 
-class Switches {
-  public:
-    Switches(Config *c);
-    bool enabled();
-    int getGroupMSBState();
-    int getGroupLSBState();
-    int getMassMSBState();
-    int getMassLSBState();
-  private:
-    Config *config;
-    int getIO(gpio_num_t g);
-    void prepareIO(gpio_num_t g);
-};
-#endif //ifndef __Switches_h
+#ifndef __commons_h
+#define __commons_h
+#include "driver/uart.h"
+
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+#define UART_SOURCE UART_SCLK_APB
+#else
+#define UART_SOURCE UART_SCLK_REF_TICK
+#endif
+
+#endif //ifndef __commons_h

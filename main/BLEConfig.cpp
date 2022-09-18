@@ -25,20 +25,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_bt.h"
-
 #include "esp_gap_ble_api.h"
 #include "esp_gatts_api.h"
 #include "esp_bt_main.h"
 #include "esp_gatt_common_api.h"
-
-//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
-static constexpr char TAG[] = "BLEConfig";
 #include "esp_log.h"
-
 #include "Config.h"
 #include "LED.h"
+
+static constexpr char TAG[] = "BLEConfig";
 
 #define PROFILE_NUM                 1
 #define PROFILE_APP_IDX             0

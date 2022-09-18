@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #ifndef __SPort_h
 #define __SPort_h
+#include "commons.h"
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "Config.h"

@@ -26,11 +26,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "nvs.h"
 #include "nvs_flash.h"
 #include <cstring>
-//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
-static constexpr char TAG[] = "Config";
 #include "esp_log.h"
+static constexpr char TAG[] = "Config";
 
 static_assert(strlen(CONFIG_BEACON_ID_BUILDER) == Config::BUILDER_LENGTH, "BEACON_ID_BUILDER string shoud be 3 char long!");
 static_assert(CONFIG_BEACON_ID_BUILDER[3] == 0, "BEACON_ID_BUILDER string shoud be null-terminated!");
@@ -51,7 +48,11 @@ Config::Config():
 model(GPS_MODEL_L80R),
 GPSSatThrs(4),
 GPSHDOPThrs(40),
+#ifdef CONFIG_IDF_TARGET_ESP32
 switchesEnabled(true),
+#else
+switchesEnabled(false),
+#endif
 hardcodedSuffixEnabled(false),
 idBuilder(CONFIG_BEACON_ID_BUILDER),
 idVersion(CONFIG_BEACON_ID_VERSION),
@@ -227,7 +228,7 @@ void Config::printConfig() {
       break;
   }
   ESP_LOGI(TAG, "Min GPS Sattelites Count Threshold to set home position: %d", getGPSSatThrs());
-  ESP_LOGI(TAG, "Max GPS HDOP Threshold to set home position: %d", getGPSHDOPThrs());
+  ESP_LOGI(TAG, "Max GPS HDOP Threshold to set home position: %d/10", getGPSHDOPThrs());
   if (switchesEnabled) {
     ESP_LOGI(TAG, "Swiches are enabled:");
     ESP_LOGI(TAG, "  - IO for Group MSB: %d", getGroupMSBPort());

@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #ifndef __JetiScreen_h
 #define __JetiScreen_h
+#include "commons.h"
 #include "Config.h"
 #include "TinyGPS++.h"
 #include "Beacon.h"

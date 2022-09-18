@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "freertos/FreeRTOS.h"
 #include "driver/gpio.h"
 #include "esp_sleep.h"
+#include "esp_log.h"
 
 #include "Config.h"
 #include "Switches.h"
@@ -38,11 +39,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tusb_console.h"
 #endif
 
-//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 static constexpr char TAG[] = "Main";
-#include "esp_log.h"
 
 #define uS_TO_mS_FACTOR 1000
 
@@ -129,6 +126,7 @@ void normal_run(void) {
     default:
       break;
   }
+  ESP_LOGI(TAG, "Entering main loop");
   while(true) {
     loop(&config, cnx, &beacon, t);
   }
@@ -146,6 +144,14 @@ void maintenance_run(void) {
 #endif
 
 extern "C" void app_main(void) {
+  esp_log_level_set("*", ESP_LOG_ERROR);
+  esp_log_level_set("Main", ESP_LOG_VERBOSE);
+  esp_log_level_set("LED", ESP_LOG_VERBOSE);
+  //esp_log_level_set("Jeti", ESP_LOG_VERBOSE);
+  //esp_log_level_set("SPort", ESP_LOG_VERBOSE);
+  esp_log_level_set("Config", ESP_LOG_INFO);
+  esp_log_level_set("GPSCnx", ESP_LOG_VERBOSE);
+  esp_log_level_set("Beacon", ESP_LOG_INFO);
 #ifdef CONFIG_IDF_TARGET_ESP32
   bool is_maintenance = (gpio_get_level((gpio_num_t)3) == 0);
   if (is_maintenance) {

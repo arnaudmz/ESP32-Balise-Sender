@@ -24,17 +24,19 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <cmath>
 #include "driver/gpio.h"
 #include "esp_sleep.h"
-
-//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
-static constexpr char TAG[] = "GPSCnx";
 #include "esp_log.h"
+
+static constexpr char TAG[] = "GPSCnx";
 
 #define GPS_BAUD_RATE 115200
 #define PPS_IO       (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO
-#define TX_IO 17
-#define RX_IO 16
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+#define TX_IO 21
+#define RX_IO 20
+#else
+#define TX_IO 32
+#define RX_IO 33
+#endif
 #define uS_TO_mS_FACTOR 1000
 
 uint8_t GPSCnx::computeNMEACksum(const char *st) {
@@ -57,10 +59,11 @@ void GPSCnx::injectIfNeeded(uint32_t nb_chars, bool inject) {
 }
 
 void GPSCnx::lowPower(uint32_t delay_ms) {
-#ifdef CONFIG_IDF_TARGET_ESP32
+#if defined(CONFIG_IDF_TARGET_ESP32)
+ //|| defined(CONFIG_IDF_TARGET_ESP32C3)
   esp_sleep_enable_timer_wakeup(delay_ms * uS_TO_mS_FACTOR);
   esp_light_sleep_start();
-#else // ESP32S2 don't sleep, as It will break USB CDC
+#else // ESP32S2 and C3 don't sleep, as It will break USB
   vTaskDelay(pdMS_TO_TICKS(delay_ms));
 #endif
 }
@@ -105,7 +108,7 @@ GPSBN220Cnx::GPSBN220Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, g
     .stop_bits = UART_STOP_BITS_1,
     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
     .rx_flow_ctrl_thresh = 0,
-    .source_clk = UART_SCLK_REF_TICK,
+    .source_clk = UART_SOURCE,
   };
   // We won't use a buffer for sending data.
   ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
@@ -125,7 +128,7 @@ GPSAT6558Cnx::GPSAT6558Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config,
     .stop_bits = UART_STOP_BITS_1,
     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
     .rx_flow_ctrl_thresh = 0,
-    .source_clk = UART_SCLK_REF_TICK,
+    .source_clk = UART_SOURCE,
   };
   // We won't use a buffer for sending data.
   ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
@@ -166,13 +169,13 @@ GPSL80RCnx::GPSL80RCnx(Config *config, TinyGPSPlus *gps): GPSPPSUARTCnx(config, 
     .stop_bits = UART_STOP_BITS_1,
     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
     .rx_flow_ctrl_thresh = 0,
-    .source_clk = UART_SCLK_REF_TICK,
+    .source_clk = UART_SOURCE,
   };
   // We won't use a buffer for sending data.
   ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
   ESP_ERROR_CHECK( uart_param_config(uartPort, &uart_config) );
   vTaskDelay(500 / portTICK_PERIOD_MS);
-  ESP_ERROR_CHECK( uart_set_pin(uartPort, TX_IO, RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) );
+  ESP_ERROR_CHECK( uart_set_pin(uartPort, TX_IO, RX_IO, 0, 22) );
   uartSendNMEA(pmtk_switch_baud_rate);
   vTaskDelay(300 / portTICK_PERIOD_MS);
   ESP_ERROR_CHECK( uart_set_baudrate(uartPort, 115200) );
@@ -192,7 +195,7 @@ GPSL96Cnx::GPSL96Cnx(Config *config, TinyGPSPlus *gps): GPSPPSUARTCnx(config, gp
     .stop_bits = UART_STOP_BITS_1,
     .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
     .rx_flow_ctrl_thresh = 0,
-    .source_clk = UART_SCLK_REF_TICK,
+    .source_clk = UART_SOURCE,
   };
   // We won't use a buffer for sending data.
   ESP_ERROR_CHECK( uart_driver_install(uartPort, RX_BUF_SIZE * 2, 0 , 0, NULL, 0) );
