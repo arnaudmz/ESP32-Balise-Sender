@@ -109,9 +109,6 @@ void normal_run(void) {
     case GPS_MODEL_AT6558:
       cnx = new GPSAT6558Cnx(&config, &gps);
       break;
-    case GPS_MODEL_AT6558_ULP:
-      cnx = new GPSAT6558ULPCnx(&config, &gps);
-      break;
     default:
       cnx = NULL;
   }

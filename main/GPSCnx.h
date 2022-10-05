@@ -85,12 +85,6 @@ class GPSBN220Cnx: public GPSUARTCnx {
 class GPSAT6558Cnx: public GPSUARTCnx {
   public:
     GPSAT6558Cnx(Config *config, TinyGPSPlus *gps);
-};
-
-class GPSAT6558ULPCnx: public GPSAT6558Cnx {
-  public:
-    GPSAT6558ULPCnx(Config *config, TinyGPSPlus *gps);
-    virtual void lowPower(uint32_t delay_ms = 0);
     virtual uint32_t waitForChars(int first_timeout_ms = 1000, int next_timeout_ms = 20, bool inject = true);
 };
 

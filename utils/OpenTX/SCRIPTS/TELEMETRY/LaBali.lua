@@ -66,6 +66,9 @@ local function run(event)
   local status
   if beacon_status_id ~= 0 then
     status = getValue(beacon_status_id)
+    if status < 0 or status > 4 then
+      status = 4
+    end
   else
     status = 4
   end

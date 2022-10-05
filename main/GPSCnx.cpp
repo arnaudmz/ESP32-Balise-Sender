@@ -73,12 +73,12 @@ void GPSCnx::lowPower(uint32_t delay_ms) {
 
 uint32_t GPSUARTCnx::waitForChars(int first_timeout_ms, int next_timeout_ms, bool inject) {
   uint32_t first_char_ts, nb_chars;
-  nb_chars = uart_read_bytes(uartPort, rxBuffer, 1, first_timeout_ms / portTICK_RATE_MS);
+  nb_chars = uart_read_bytes(uartPort, rxBuffer, 1, first_timeout_ms / portTICK_PERIOD_MS);
   if (nb_chars == 0) {
     return 0;
   }
   first_char_ts = millis();
-  nb_chars += uart_read_bytes(uartPort, &rxBuffer[1], RX_BUF_SIZE - 1, next_timeout_ms / portTICK_RATE_MS);
+  nb_chars += uart_read_bytes(uartPort, &rxBuffer[1], RX_BUF_SIZE - 1, next_timeout_ms / portTICK_PERIOD_MS);
   injectIfNeeded(nb_chars, inject);
   ESP_LOG_BUFFER_HEXDUMP(TAG, rxBuffer, nb_chars, ESP_LOG_VERBOSE);
   return first_char_ts;
@@ -100,7 +100,7 @@ void GPSUARTCnx::uartSendNMEA(const char *st) {
   uart_write_bytes(uartPort, &prolog, 1);
   uart_write_bytes(uartPort, st, strlen(st));
   uart_write_bytes(uartPort, (const char*)crc_buf, 5);
-  ESP_ERROR_CHECK( uart_wait_tx_done(uartPort, 1000 / portTICK_RATE_MS) );
+  ESP_ERROR_CHECK( uart_wait_tx_done(uartPort, 1000 / portTICK_PERIOD_MS) );
 }
 
 GPSBN220Cnx::GPSBN220Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, gps) {
@@ -146,26 +146,9 @@ GPSAT6558Cnx::GPSAT6558Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config,
   uartSendNMEA(pcas_save_to_flash); // not sure it actually works
 }
 
-GPSAT6558ULPCnx::GPSAT6558ULPCnx(Config *config, TinyGPSPlus *gps) : GPSAT6558Cnx(config, gps) {
-  uart_driver_delete(uartPort);
-  esp_sleep_enable_ulp_wakeup();
-}
-
-void GPSAT6558ULPCnx::lowPower(uint32_t delay_ms) {
-  esp_light_sleep_start();
-}
-
-uint32_t GPSAT6558ULPCnx::waitForChars(int first_timeout_ms, int next_timeout_ms, bool inject) {
-  uint32_t first_char_ts, nb_chars = 0;
   first_char_ts = millis();
-  uint32_t *ptr = &ulp_rx_buf;
-  for (int i = 0; i < (ulp_rx_buf_len & 0xff) - 1; i++) {
-    if((ptr[i] & 0xff) != 0xd) {
-      rxBuffer[nb_chars++] = ptr[i] & 0xff;
     }
   }
-  rxBuffer[nb_chars] = '\0';
-  injectIfNeeded(nb_chars, inject);
   return first_char_ts;
 }
 
