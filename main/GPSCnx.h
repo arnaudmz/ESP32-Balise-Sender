@@ -36,7 +36,6 @@ class GPSCnx {
     virtual void lowPower(uint32_t delay_ms = 0);
   protected:
     uint8_t computeNMEACksum(const char *st);
-    uint32_t computeCASICCksum(uint8_t c, uint8_t id, const uint8_t* payload, uint16_t p_len);
     void injectIfNeeded(uint32_t nb_chars, bool inject);
     Config *config;
     TinyGPSPlus *gps;
@@ -75,7 +74,6 @@ class GPSUARTCnx: public GPSCnx {
     const uart_port_t uartPort = UART_NUM_0;
 #endif
     void uartSendNMEA(const char *st);
-    void uartSendCASIC(uint8_t c, uint8_t id, const uint8_t *payload, uint16_t p_len);
     void uartWaitForSilence(int timeout_ms = 30);
 };
 
