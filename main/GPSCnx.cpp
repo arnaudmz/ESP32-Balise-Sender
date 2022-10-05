@@ -50,6 +50,15 @@ uint8_t GPSCnx::computeNMEACksum(const char *st) {
   return cksum;
 }
 
+uint32_t GPSCnx::computeCASICCksum(uint8_t c, uint8_t id, const uint8_t* payload, uint16_t p_len) {
+  uint32_t cksum = (id << 24) | (c << 16) | p_len;
+  uint32_t *p = (uint32_t *) payload;
+  for (uint16_t i = 0; i < (p_len >> 2); i ++) {                                                               
+    cksum += p[i];
+  }
+  return cksum;
+}
+
 void GPSCnx::injectIfNeeded(uint32_t nb_chars, bool inject) {
   if(inject) {
     for(int i = 0; i < nb_chars; i++) {
@@ -103,6 +112,16 @@ void GPSUARTCnx::uartSendNMEA(const char *st) {
   ESP_ERROR_CHECK( uart_wait_tx_done(uartPort, 1000 / portTICK_PERIOD_MS) );
 }
 
+void GPSUARTCnx::uartSendCASIC(uint8_t c, uint8_t id, const uint8_t *payload, uint16_t p_len) {
+  uint32_t cksum = computeCASICCksum(c, id, payload, p_len);
+  const uint8_t prolog[] = {0xba, 0xce, (uint8_t) (p_len & 0xff), (uint8_t) (p_len >> 8), c, id};
+  uart_write_bytes(uartPort, prolog, sizeof(prolog));
+  if(p_len > 0) {
+    uart_write_bytes(uartPort, payload, p_len);
+  }
+  uart_write_bytes(uartPort, &cksum, sizeof(cksum));
+}
+
 GPSBN220Cnx::GPSBN220Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, gps) {
   uart_config_t uart_config = {
     .baud_rate = 115200,
@@ -121,7 +140,7 @@ GPSBN220Cnx::GPSBN220Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, g
 
 GPSAT6558Cnx::GPSAT6558Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, gps) {
   const char pcas_enable_all_gns[] = "PCAS04,7";
-  const char pcas_limit_msg[] = "PCAS03,1,0,0,0,1,0,0,0";
+  const char pcas_limit_msg[] = "PCAS03,0,0,0,0,0,0,0,0";
   const char pcas_switch_to_115200[] = "PCAS01,5";
   const char pcas_save_to_flash[] = "PCAS00";
   uart_config_t uart_config = {
@@ -146,7 +165,70 @@ GPSAT6558Cnx::GPSAT6558Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config,
   uartSendNMEA(pcas_save_to_flash); // not sure it actually works
 }
 
+uint32_t GPSAT6558Cnx::waitForChars(int first_timeout_ms, int next_timeout_ms, bool inject) {
+  uint32_t first_char_ts;
+  uint32_t query_RMC_msg = 0xffff044e;
+  uint32_t query_GGA_msg = 0xffff004e;
+  ESP_LOGV(TAG, "Send RMC CMD");
+  //uartSendCASIC(0x06, 0x01, (uint8_t *)&query_RMC_msg, 4);
+  ESP_LOGV(TAG, "Send GGA CMD");
+  //uartSendCASIC(0x06, 0x01, (uint8_t *)&query_GGA_msg, 4);
+  uint32_t nb_chars = uart_read_bytes(uartPort, rxBuffer, sizeof(rxBuffer), next_timeout_ms / portTICK_PERIOD_MS);
+  if (nb_chars == 0) {
+    ESP_LOGW(TAG, "Read nothing");
+    return 0;
+  }
   first_char_ts = millis();
+  const uint8_t *ptr = (const uint8_t *)rxBuffer;
+  int16_t r_len = nb_chars;
+  while (r_len > 0) {
+    if (r_len < 10) {
+      ESP_LOGW(TAG, "Error, too few (%d) bytes received", r_len);
+      return first_char_ts;
+    }
+    if (ptr[0] != 0xba || ptr[1] != 0xce) {
+      if (ptr[0] != '$' || ptr[1] != 'G') {
+        ESP_LOGW(TAG, "Error, invalid message header (0x%02x, 0x%02x) received", ptr[0], ptr[1]);
+        return first_char_ts;
+      }
+      // this looks like NMEA Stuff, look for CRLF
+      void *eos = memchr(ptr, 0x0a, r_len);
+      if (!eos) {
+        ESP_LOGW(TAG, "Error, can't find separator for NMEA String");
+        ESP_LOG_BUFFER_HEXDUMP("payload", ptr, r_len, ESP_LOG_ERROR);
+        return first_char_ts;
+      }
+      uint16_t len = (uint32_t)eos - (uint32_t)ptr + 1;
+      if (inject) {
+        for (int i = 0; i < len; i++) {
+          gps->encode(ptr[i]);
+        }
+        ESP_LOGI(TAG, "Injected %d chars", len);
+      }
+      ptr += len;
+      r_len -= len;
+    } else {
+      uint16_t p_len = (ptr[3] << 8) | ptr[2];
+      if (p_len + 10 > r_len) {
+        ESP_LOGW(TAG, "Error, invalid payload length (read 0x%02x, remaning 0x%02x)", p_len, r_len);
+        return first_char_ts;
+      }
+      uint8_t c = ptr[4];
+      uint8_t id = ptr[5];
+      uint32_t computed_cksum = computeCASICCksum(c, id, &ptr[6], p_len);
+      uint32_t *read_cksum = (uint32_t *)&ptr[6 + p_len];
+      if (*read_cksum != computed_cksum) {
+        ESP_LOGW(TAG, "Invalid msg[%d] cksum: class=0x%02x, id=0x%02x, exp=0x%04x != got=0x%04x", p_len, c, id, computed_cksum, *read_cksum);
+        ESP_LOG_BUFFER_HEXDUMP("msg", ptr, p_len + 10, ESP_LOG_ERROR);
+      } else {
+        // Got a valid response, but do nothing so far with it if it's an ACK-ACK
+        if (c != 0x05 || id != 0x01) {
+          ESP_LOGW(TAG, "Got valid but unexpected msg: class=0x%02x, id=0x%02x", c, id);
+          ESP_LOG_BUFFER_HEXDUMP("payload", &ptr[6], p_len, ESP_LOG_ERROR);
+        }
+      }
+      ptr = &ptr[p_len + 10];
+      r_len -= p_len + 10;
     }
   }
   return first_char_ts;
