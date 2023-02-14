@@ -1,0 +1,24 @@
+#pragma once
+
+#define HIGH         1
+#define LOW          0
+
+enum {
+  START_MODE_LED_ONLY = 0,
+  START_MODE_LED_AND_SPORT
+};
+
+enum {
+  SPORT_CMD_NONE = 0,
+  SPORT_CMD_NEW_PREFIX
+};
+
+enum {
+  LED_CMD_NONE = 0,
+  LED_CMD_BLINK_ONCE,
+  LED_CMD_BLINK_TWICE,
+  LED_CMD_FADE_IN,
+  LED_CMD_FADE_OUT,
+  LED_CMD_BLINK_FOREVER
+};
+
