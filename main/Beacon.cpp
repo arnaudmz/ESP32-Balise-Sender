@@ -159,7 +159,7 @@ BeaconState Beacon::getState() {
 void Beacon::handleData() {
   switch (getState()) {
     case NO_GPS:
-      ESP_LOGI(TAG, "Positioning(%llu), valid: %d, hdop: %.2f, time: %02d:%02d:%02d",
+      ESP_LOGI(TAG, "Positioning(%llu), valid: %ld, hdop: %.2f, time: %02d:%02d:%02d",
           gpsSec++,
           gps->satellites.value(),
           (float) gps->hdop.hdop(),
@@ -208,7 +208,7 @@ void Beacon::handleData() {
   }
   droneID->set_ground_speed(gps->speed.mps());
   droneID->set_heigth(gps->altitude.meters() - homeAlt);
-  ESP_LOGI(TAG, "%d:%02d:%02dZ: lng=%.4f, lat=%.4f, satt=%d, hdop=%.2f",
+  ESP_LOGI(TAG, "%d:%02d:%02dZ: lng=%.4f, lat=%.4f, satt=%ld, hdop=%.2f",
     gps->time.hour(),
     gps->time.minute(),
     gps->time.second(),

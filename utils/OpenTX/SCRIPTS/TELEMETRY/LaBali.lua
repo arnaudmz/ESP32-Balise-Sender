@@ -106,7 +106,7 @@ local function run(event)
 
   if beacon_hdop_id ~= 0 then
     lcd.drawText(80, 47, "HDOP", SMLSIZE)
-    lcd.drawText(128, 47, string.format("%.1f", getValue(beacon_hdop_id)), SMLSIZE + RIGHT)
+    lcd.drawText(128, 47, string.format("%.1f", getValue(beacon_hdop_id) / 100), SMLSIZE + RIGHT)
   end
 
   if beacon_frames_id ~= 0 then

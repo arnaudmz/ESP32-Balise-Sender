@@ -23,8 +23,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define __commons_h
 #include "driver/uart.h"
 
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-#define UART_SOURCE UART_SCLK_APB
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+//#define UART_SOURCE UART_SCLK_APB
+#define UART_SOURCE UART_SCLK_XTAL
 #else
 #define UART_SOURCE UART_SCLK_REF_TICK
 #endif

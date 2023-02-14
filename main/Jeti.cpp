@@ -24,12 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <cmath>
 #include "driver/gpio.h"
 #include "esp_sleep.h"
-#ifdef CONFIG_IDF_TARGET_ESP32
-#include "esp32/clk.h"
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-static inline uint32_t esp_clk_cpu_freq() { return 80000000; }
-#endif
+#include "esp_private/esp_clk.h"
 #include "driver/uart.h"
 #include "esp_log.h"
 
@@ -116,7 +111,7 @@ config(c),
 gps(gps),
 beacon(beacon),
 screen(c, gps, beacon) {
-  gpio_pad_select_gpio(RX_IO);
+  gpio_reset_pin(RX_IO);
   bitTime = esp_clk_cpu_freq() / 9700;
   switchToRX();
   //gpio_pad_select_gpio(GPIO_NUM_17);
@@ -135,10 +130,7 @@ void JetiTelemetry::switchToTX() {
 
 uint32_t JetiTelemetry::getCycleCount() {
   uint32_t ccount = 0;
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-#else
   __asm__ __volatile__("esync; rsr %0,ccount":"=a" (ccount));
-#endif
   return ccount;
 }
 
@@ -180,7 +172,7 @@ void JetiTelemetry::uartWrite(uint8_t byte, bool bit8) {
 
   portEXIT_CRITICAL(&mux);
 }
-    
+
 #define POLY 0x07
 uint8_t JetiTelemetry::updateCRC(uint8_t c, uint8_t crc_seed) {
   uint8_t crc_u = c;
@@ -497,7 +489,7 @@ void JetiExBusTelemetry::handle(uint32_t end_ts) {
     uint32_t first_telem_char_ts = readChars();
     int32_t remaining_ms = 15 - (millis() - first_telem_char_ts);
     if (remaining_ms > 0) {
-      ESP_LOGV(TAG, "I can sleep for %d ms, before next telem frame", remaining_ms);
+      ESP_LOGV(TAG, "I can sleep for %ld ms, before next telem frame", remaining_ms);
       esp_sleep_enable_timer_wakeup(remaining_ms * uS_TO_mS_FACTOR);
       esp_light_sleep_start();
     }

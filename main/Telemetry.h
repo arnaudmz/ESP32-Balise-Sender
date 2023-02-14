@@ -23,6 +23,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "commons.h"
 class Telemetry {
   public:
-    virtual void handle(uint32_t end_ts);
+    virtual void handle(uint32_t end_ts) = 0;
 };
 #endif //ifndef __Telemetry_h

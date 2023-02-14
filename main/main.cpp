@@ -22,18 +22,24 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "driver/gpio.h"
 #include "esp_sleep.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 #include "Config.h"
 #include "Switches.h"
 #include "TinyGPS++.h"
 #include "GPSCnx.h"
 #include "LED.h"
+#include "ULP.h"
 #include "Beacon.h"
 #include "Telemetry.h"
+#if defined(CONFIG_IDF_TARGET_ESP32)
 #include "SPort.h"
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+#include "SPortULP.h"
+#endif
 #include "Jeti.h"
 #include "droneID_FR.h"
-#if defined(CONFIG_IDF_TARGET_ESP32S2) && defined(CONFIG_USB_CDC_ENABLED)
+#if defined(CONFIG_IDF_TARGET_ESP32S3) && defined(CONFIG_USB_CDC_ENABLED)
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
 #include "tusb_console.h"
@@ -55,32 +61,31 @@ void low_power(GPSCnx *cnx, uint32_t delay_ms = 0) {
 
 void loop(Config *config, GPSCnx * cnx, Beacon *beacon, Telemetry *t) {
   uint32_t first_char_ts, startup_ts = millis();
-  ESP_LOGV(TAG, "%d Main loop", startup_ts);
+  ESP_LOGV(TAG, "%ld Main loop", startup_ts);
   first_char_ts = cnx->waitForChars();
-  ESP_LOGD(TAG, "Spent %ldms to read, wasted %d ms", millis() - startup_ts, first_char_ts - startup_ts);
+  ESP_LOGI(TAG, "Spent %ldms to read, wasted %ld ms", millis() - startup_ts, first_char_ts - startup_ts);
   beacon->handleData();
   if (config->getTelemetryMode() != TELEMETRY_OFF && t != NULL){
     t->handle(first_char_ts + 950);
-  } else {
-    uint32_t sleep_duration = 990;
-    switch (config->getGPSModel()) {
-      case GPS_MODEL_BN_220:
-      case GPS_MODEL_AT6558:
-      case GPS_MODEL_MOCK:
-        if (first_char_ts > 0) {
-          sleep_duration -= millis() - first_char_ts;
-        }
-        if (sleep_duration > 0) {
-          ESP_LOGV(TAG, "%ld Going to sleep for %dms", millis(), sleep_duration);
-          low_power(cnx, sleep_duration);
-        } else {
-          ESP_LOGV(TAG, "%ld Not Going to sleep (%d)ms!", millis(), sleep_duration);
-        }
-        break;
-      default:
-        ESP_LOGV(TAG, "%ld Going to sleep", millis());
-        low_power(cnx);
-    }
+  }
+  uint32_t sleep_duration = 990;
+  switch (config->getGPSModel()) {
+    case GPS_MODEL_BN_220:
+    case GPS_MODEL_AT6558:
+    case GPS_MODEL_MOCK:
+      if (first_char_ts > 0) {
+        sleep_duration -= millis() - first_char_ts;
+      }
+      if (sleep_duration > 0) {
+        ESP_LOGV(TAG, "%ld Going to sleep for %ldms", millis(), sleep_duration);
+        low_power(cnx, sleep_duration);
+      } else {
+        ESP_LOGV(TAG, "%ld Not Going to sleep (%ld)ms!", millis(), sleep_duration);
+      }
+      break;
+    default:
+      ESP_LOGV(TAG, "%ld Going to sleep", millis());
+      low_power(cnx);
   }
 }
 
@@ -91,6 +96,7 @@ void normal_run(void) {
   TinyGPSPlus gps;
   droneIDFR droneID;
   LED led;
+  ULP ulp(&config);
   Beacon beacon(&config, &led, &switches, &droneID, &gps);
   GPSCnx *cnx;
   switch (config.getGPSModel()) {
@@ -115,7 +121,11 @@ void normal_run(void) {
   Telemetry *t = NULL;
   switch(config.getTelemetryMode()) {
     case TELEMETRY_FRSP:
+#ifdef CONFIG_IDF_TARGET_ESP32
       t = new SPort(&config, &gps, &beacon);
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+      t = new SPortULP(&config, &gps, &beacon);
+#endif
       break;
     case TELEMETRY_JETI:
       t = new JetiTelemetry(&config, &gps, &beacon);
@@ -139,18 +149,21 @@ void maintenance_run(void) {
   Config config;
   config.printConfig();
   LED led;
+  ULP ulp(&config, true);
   ble_serve(&config, &led);
 }
 #endif
 
 extern "C" void app_main(void) {
   esp_log_level_set("*", ESP_LOG_ERROR);
-  esp_log_level_set("Main", ESP_LOG_VERBOSE);
-  esp_log_level_set("LED", ESP_LOG_VERBOSE);
+  esp_log_level_set("Main", ESP_LOG_INFO);
+  //esp_log_level_set("LED", ESP_LOG_INFO);
+  //esp_log_level_set("ULP", ESP_LOG_VERBOSE);
   //esp_log_level_set("Jeti", ESP_LOG_VERBOSE);
   //esp_log_level_set("SPort", ESP_LOG_VERBOSE);
-  esp_log_level_set("Config", ESP_LOG_INFO);
-  esp_log_level_set("GPSCnx", ESP_LOG_VERBOSE);
+  //esp_log_level_set("SPortULP", ESP_LOG_VERBOSE);
+  //esp_log_level_set("Config", ESP_LOG_INFO);
+  //esp_log_level_set("GPSCnx", ESP_LOG_INFO);
   esp_log_level_set("Beacon", ESP_LOG_INFO);
 #ifdef CONFIG_IDF_TARGET_ESP32
   bool is_maintenance = (gpio_get_level((gpio_num_t)3) == 0);
@@ -159,7 +172,7 @@ extern "C" void app_main(void) {
     maintenance_run();
   } else {
 #else
-#if defined(CONFIG_IDF_TARGET_ESP32S2) && defined(CONFIG_USB_CDC_ENABLED)
+#if defined(CONFIG_IDF_TARGET_ESP32S3) && defined(CONFIG_USB_CDC_ENABLED)
   tinyusb_config_t tusb_cfg = { 0 }; // the configuration uses default values
   ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
   tinyusb_config_cdcacm_t amc_cfg = { }; // the configuration uses default values

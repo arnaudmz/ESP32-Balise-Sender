@@ -19,125 +19,37 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "LED.h"
-#ifdef CONFIG_IDF_TARGET_ESP32
-#include "esp32/ulp.h"
-#elif CONFIG_IDF_TARGET_ESP32S2
-#include "esp32s2/ulp.h"
-//#include "esp32s2/ulp_riscv.h"
-// Waiting for the C++ compatible headers
-extern "C" {
-  esp_err_t ulp_riscv_run(void);
-  esp_err_t ulp_riscv_load_binary(const uint8_t* program_binary, size_t program_size_bytes);
-}
-#endif // ifdef CONFIG_IDF_TARGET_ESP32
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
 #include "ulp_main.h"
-extern const uint8_t bin_start[] asm("_binary_ulp_main_bin_start");
-extern const uint8_t bin_end[]   asm("_binary_ulp_main_bin_end");
-#endif // if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-
-#if CONFIG_IDF_TARGET_ESP32C3
-#include "driver/ledc.h"
-#define BLINK_GPIO 3
-#define MAX_DC 16383
-
-ledc_timer_config_t ledc_timer;
-ledc_channel_config_t ledc_channel;
-#endif
-
-#include "driver/rtc_io.h"
+#include "ulp_shared_types.h"
 
 //#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 //#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
-static constexpr char TAG[] = "Led";
+static constexpr char TAG[] = "LED";
 #include "esp_log.h"
 
 LED::LED(): fade_state(false) {
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-  rtc_gpio_init(GPIO_NUM_2);
-  rtc_gpio_set_direction(GPIO_NUM_2, RTC_GPIO_MODE_OUTPUT_ONLY);
-#endif // if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-#ifdef CONFIG_IDF_TARGET_ESP32
-  ESP_ERROR_CHECK( ulp_load_binary(0, bin_start,(bin_end - bin_start) / sizeof(uint32_t)) );
-  ESP_ERROR_CHECK( ulp_run(&ulp_entry - RTC_SLOW_MEM) );
-#else
-#ifdef CONFIG_IDF_TARGET_ESP32S2
-  ESP_ERROR_CHECK( ulp_riscv_load_binary(bin_start, (bin_end - bin_start)) );
-  ESP_ERROR_CHECK( ulp_riscv_run() );
-#endif
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-  ledc_timer.duty_resolution = LEDC_TIMER_14_BIT;
-  ledc_timer.freq_hz         = 1000;                      // frequency of PWM signal
-  ledc_timer.speed_mode      = LEDC_LOW_SPEED_MODE;    // timer mode
-  ledc_timer.timer_num       = LEDC_TIMER_0;            // timer index
-  ledc_timer.clk_cfg         = LEDC_AUTO_CLK;             // Auto select the source clock
-  ledc_channel.channel       = LEDC_CHANNEL_0;
-  ledc_channel.duty          = 0;
-  ledc_channel.gpio_num      = BLINK_GPIO;
-  ledc_channel.speed_mode    = LEDC_LOW_SPEED_MODE;
-  ledc_channel.hpoint        = 0;
-  ledc_channel.timer_sel     = LEDC_TIMER_0;
-  ledc_channel.flags.output_invert = 1;
-  ledc_timer_config(&ledc_timer);
-  ledc_channel_config(&ledc_channel);
-  ledc_fade_func_install(0);
-#endif
 }
 
 void LED::blinkOnce() {
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-  ulp_cmd = 1;
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, MAX_DC, 1, LEDC_FADE_NO_WAIT);
-  vTaskDelay(pdMS_TO_TICKS(100));
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0, 1, LEDC_FADE_NO_WAIT);
-#endif
+  ulp_led_cmd = LED_CMD_BLINK_ONCE;
+  ESP_LOGI(TAG, "Blink Once");
 }
 
 void LED::blinkTwice() {
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-  ulp_cmd = 2;
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, MAX_DC, 1, LEDC_FADE_NO_WAIT);
-  vTaskDelay(pdMS_TO_TICKS(100));
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0, 1, LEDC_FADE_NO_WAIT);
-  vTaskDelay(pdMS_TO_TICKS(100));
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, MAX_DC, 1, LEDC_FADE_NO_WAIT);
-  vTaskDelay(pdMS_TO_TICKS(100));
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0, 1, LEDC_FADE_NO_WAIT);
-#endif
+  ulp_led_cmd = LED_CMD_BLINK_TWICE;
 }
 
 void LED::fadeIn() {
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-  ulp_cmd = 3;
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, MAX_DC, 500, LEDC_FADE_NO_WAIT);
-#endif
+  ulp_led_cmd = LED_CMD_FADE_IN;
 }
 
 void LED::fadeOut() {
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-  ulp_cmd = 4;
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0, 500, LEDC_FADE_NO_WAIT);
-#endif
+  ulp_led_cmd = LED_CMD_FADE_OUT;
 }
 
 void LED::blinkFastForever() {
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-  ulp_cmd = 5;
-#endif
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-  ledc_set_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0, 5);
-  ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 8191, 0, LEDC_FADE_NO_WAIT);
-#endif
+  ulp_led_cmd = LED_CMD_BLINK_FOREVER;
 }
 
 void LED::toggleFade() {

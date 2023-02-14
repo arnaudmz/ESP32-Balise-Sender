@@ -51,7 +51,7 @@ int Switches::getMassLSBState() {
 }
 
 void Switches::prepareIO(gpio_num_t g) {
-  gpio_pad_select_gpio(g);
+  gpio_reset_pin(g);
   ESP_ERROR_CHECK( gpio_set_direction(g, GPIO_MODE_INPUT) );
 }
 

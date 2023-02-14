@@ -1,75 +1,40 @@
 // vim:et:sts=2:sw=2:si
+
+#include <stdio.h>
 #include <stdint.h>
-#include "ulp_riscv/ulp_riscv.h"
-#include "ulp_riscv/ulp_riscv_utils.h"
-#include "ulp_gpio.h"
+#include <stdbool.h>
+#include <string.h>
+//#include "ulp_riscv.h"
+#include "ulp_riscv_utils.h"
+#include "ulp_riscv_gpio.h"
 
-/* this variable will be exported as a public symbol, visible from main CPU: */
-volatile uint32_t cmd = 0;
-#define LED_IO GPIO_NUM_21
-#define LED_ON ulp_gpio_output_level(LED_IO, 0)
-#define LED_OFF ulp_gpio_output_level(LED_IO, 1)
-#define MS_TICKS 195
+#include "ulp_shared_types.h"
+#include "dbg.h"
+#include "uart.h"
+#include "sport.h"
+#include "led.h"
 
-void delay(uint32_t duration) {
-  for(volatile uint32_t i = 0; i < duration; i++) {
-    ;
-  }
-}
-
-void blink(uint32_t duration) {
-  LED_ON;
-  delay(duration);
-  LED_OFF;
-}
-
-void fade_in() {
-  for (uint8_t i = 0 ; i < 255; i++){
-    LED_OFF;
-    delay((255 - i) << 1);
-    LED_ON;
-    delay(i << 1);
-  }
-}
-
-void fade_out() {
-  for (uint8_t i = 0 ; i < 255; i++){
-    LED_ON;
-    delay((255 - i) << 1);
-    LED_OFF;
-    delay(i << 1);
-  }
-}
+// should we start only LED loop or LED + FRSKY SPport loop ?
+volatile uint32_t start_mode = START_MODE_LED_ONLY;
 
 int main (void) {
-  ulp_gpio_init(LED_IO);
-  ulp_gpio_output_enable(LED_IO);
-  while(1) {  
-    switch(cmd) {
-      case 1:
-        blink(100 * MS_TICKS);
-        cmd = 0;
-        break;
-      case 2:
-        blink(100 * MS_TICKS);
-        delay(100 * MS_TICKS);
-        blink(100 * MS_TICKS);
-        cmd = 0;
-        break;
-      case 3:
-        fade_in();
-        cmd = 0;
-        break;
-      case 4:
-        fade_out();
-        cmd = 0;
-        break;
-      case 5:
-        blink(200 * MS_TICKS);
-        delay(200 * MS_TICKS);
-        break;
-      default:
-        break;
+  if (start_mode ==  START_MODE_LED_ONLY) {
+    ;
+  }
+  uint8_t st[16];
+  static uint32_t count = 0;
+  dbg_init();
+  led_init();
+  uart_init();
+  uint8_t old_val = 0;
+  while(1) {
+    if (uart_wait_for_start_bit(20)) {
+      // got a start bit, read all bits + stop bit
+      st[count++] = uart_get_byte();
+    } else {
+      led_handle();
+      sport_handle(st, count);
+      count = 0;
     }
   }
   return 0;

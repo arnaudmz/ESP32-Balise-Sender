@@ -25,17 +25,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "driver/gpio.h"
 #include "esp_sleep.h"
 #include "esp_log.h"
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32)
-#include "ulp_main.h"
-#endif
+#include "driver/uart.h"
 
 static constexpr char TAG[] = "GPSCnx";
 
 #define GPS_BAUD_RATE 115200
 #define PPS_IO       (gpio_num_t)CONFIG_BEACON_GPS_PPS_IO
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-#define TX_IO 21
-#define RX_IO 20
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#define TX_IO 37
+#define RX_IO 36
 #else
 #define TX_IO 32
 #define RX_IO 33
@@ -55,20 +53,17 @@ void GPSCnx::injectIfNeeded(uint32_t nb_chars, bool inject) {
     for(int i = 0; i < nb_chars; i++) {
       gps->encode(rxBuffer[i]);
     }
-    ESP_LOGI(TAG, "Injected %d chars", nb_chars);
+    ESP_LOGI(TAG, "Injected %ld chars", nb_chars);
+    //ESP_LOG_BUFFER_HEXDUMP(TAG, rxBuffer, nb_chars, ESP_LOG_INFO);
   } else {
-    ESP_LOGV(TAG, "Dropped %d chars", nb_chars);
+    ESP_LOGV(TAG, "Dropped %ld chars", nb_chars);
   }
 }
 
 void GPSCnx::lowPower(uint32_t delay_ms) {
-#if defined(CONFIG_IDF_TARGET_ESP32)
- //|| defined(CONFIG_IDF_TARGET_ESP32C3)
+  uart_wait_tx_idle_polling(CONFIG_ESP_CONSOLE_UART_NUM);
   esp_sleep_enable_timer_wakeup(delay_ms * uS_TO_mS_FACTOR);
   esp_light_sleep_start();
-#else // ESP32S2 and C3 don't sleep, as It will break USB
-  vTaskDelay(pdMS_TO_TICKS(delay_ms));
-#endif
 }
 
 uint32_t GPSUARTCnx::waitForChars(int first_timeout_ms, int next_timeout_ms, bool inject) {
@@ -146,14 +141,13 @@ GPSAT6558Cnx::GPSAT6558Cnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config,
   uartSendNMEA(pcas_save_to_flash); // not sure it actually works
 }
 
-  first_char_ts = millis();
-    }
-  }
-  return first_char_ts;
+void GPSAT6558Cnx::lowPower(uint32_t delay_ms) {
+  GPSCnx::lowPower(delay_ms);
+  uart_flush_input(uartPort);
 }
 
 GPSPPSUARTCnx::GPSPPSUARTCnx(Config *config, TinyGPSPlus *gps): GPSUARTCnx(config, gps) {
-  gpio_pad_select_gpio(config->getPPSPort());
+  gpio_reset_pin(config->getPPSPort());
   gpio_set_direction(config->getPPSPort(), GPIO_MODE_INPUT);
 }
 

@@ -29,11 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 static constexpr char TAG[] = "SPort";
 
 #define SPORT_BAUD_RATE 57600
-#ifdef CONFIG_IDF_TARGET_ESP32C3
-#define RX_IO 10
-#else
 #define RX_IO 5
-#endif //ifdef CONFIG_IDF_TARGET_ESP32C3
 #define TX_IO 18
 #define uS_TO_mS_FACTOR 1000
 

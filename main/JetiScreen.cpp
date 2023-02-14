@@ -22,9 +22,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <cstring>
 #include <ctype.h>
 
-//#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-//#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
-#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 static constexpr char TAG[] = "JetiScreen";
 #include "esp_log.h"
 
@@ -65,7 +62,7 @@ void JetiScreen::setHomeScreen() {
   const char *pref = beacon->getLastPrefixStr();
   snprintf(screen, 33, "LaBalise  [%c%c%c%c]%16s", pref[0], pref[1], pref[2], pref[3], status);
 }
-    
+
 void JetiScreen::setBeaconIDScreen() {
   const char *id;
   char v_id[4], m_id[4];
@@ -83,9 +80,9 @@ void JetiScreen::setSatStatusScreen() {
     hdop = 99.99;
   }
   if (hdop < 10.0) {
-    snprintf(screen, 33, "Satellites :  %2dHDOP :      %1.2f", gps->satellites.value(), hdop);
+    snprintf(screen, 33, "Satellites :  %2ldHDOP :      %1.2f", gps->satellites.value(), hdop);
   } else {
-    snprintf(screen, 33, "Satellites :  %2dHDOP :     %2.2f", gps->satellites.value(), hdop);
+    snprintf(screen, 33, "Satellites :  %2ldHDOP :     %2.2f", gps->satellites.value(), hdop);
   }
 }
 
@@ -265,7 +262,7 @@ bool JetiScreen::saveNewPrefix() {
     ESP_LOGD(TAG, "Not changing prefix, same as previous");
     return false;
   }
-  ESP_LOGD(TAG, "New Prefix: %d=%c%c%c%c", bin_pref, new_prefix[0], new_prefix[1], new_prefix[2], new_prefix[3]);
+  ESP_LOGD(TAG, "New Prefix: %ld=%c%c%c%c", bin_pref, new_prefix[0], new_prefix[1], new_prefix[2], new_prefix[3]);
   esp_err_t err = config->setPrefix(new_prefix);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Can't change prefix: %s", esp_err_to_name(err));

@@ -21,7 +21,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "Config.h"
 #include "esp_system.h"
 #include "esp_ota_ops.h"
-#include "esp_wifi.h"
+//#include "esp_wifi.h"
+#include "esp_mac.h"
 #include "driver/gpio.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -33,7 +34,7 @@ static_assert(strlen(CONFIG_BEACON_ID_BUILDER) == Config::BUILDER_LENGTH, "BEACO
 static_assert(CONFIG_BEACON_ID_BUILDER[3] == 0, "BEACON_ID_BUILDER string shoud be null-terminated!");
 static_assert(strlen(CONFIG_BEACON_ID_VERSION) == Config::VERSION_LENGTH, "BEACON_VERSION string shoud be 3 char long!");
 static_assert(CONFIG_BEACON_ID_VERSION[3] == 0, "BEACON_VERSION string shoud be null-terminated!");
-    
+
 static constexpr char BUILDER_NVS_NAME[]       = "ovr_builder";
 static constexpr char VERSION_NVS_NAME[]       = "ovr_version";
 static constexpr char PREFIX_NVS_NAME[]        = "ovr_prefix";
@@ -122,7 +123,7 @@ esp_err_t Config::getFixedStr(nvs_handle_t h, const char*name, char *st, uint8_t
   return ESP_OK;
 }
 const char *Config::getAppVersion() {
-  return esp_ota_get_app_description()->version;
+  return esp_app_get_description()->version;
 }
 
 GPSModel Config::getGPSModel() {
@@ -199,7 +200,7 @@ TelemetryMode Config::getTelemetryMode() {
 }
 
 void Config::printConfig() {
-  const esp_app_desc_t *app = esp_ota_get_app_description();
+  const esp_app_desc_t *app = esp_app_get_description();
   ESP_LOGI(TAG, "Starting Beacon (%s) version %s", app->project_name, app->version);
   ESP_LOGI(TAG, "MAC address: %02X:%02X:%02X:%02X:%02X:%02X", macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
   ESP_LOGI(TAG, "SSID: %s", ssid);
