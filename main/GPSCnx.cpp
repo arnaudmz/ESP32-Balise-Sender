@@ -35,8 +35,8 @@ static constexpr char TAG[] = "GPSCnx";
 #define TX_IO 37
 #define RX_IO 36
 #else
-#define TX_IO 32
-#define RX_IO 33
+#define TX_IO 17
+#define RX_IO 16
 #endif
 #define uS_TO_mS_FACTOR 1000
 
