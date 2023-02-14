@@ -18,8 +18,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef __JetiScreen_h
-#define __JetiScreen_h
+#pragma once
 #include "commons.h"
 #include "Config.h"
 #include "TinyGPS++.h"
@@ -73,4 +72,3 @@ class JetiScreen {
     JetiReply lastReply = JETI_REPLY_NONE;
     uint32_t lastButtonChangeTS = 0;
 };
-#endif //ifndef __JetiScreen_h

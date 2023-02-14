@@ -18,8 +18,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef __Config_h
-#define __Config_h
+#pragma once
 #include "commons.h"
 #include "nvs.h"
 #include "driver/gpio.h"
@@ -104,4 +103,3 @@ class Config {
     char idSuffix[SUFFIX_LENGTH + 1];
     char telemetry[TELEMETRY_LENGTH + 1];
 };
-#endif //ifndef __Config_h

@@ -19,8 +19,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef __LED_h
-#define __LED_h
+#pragma once
 #include "commons.h"
 
 #include "driver/uart.h"
@@ -40,5 +39,3 @@ class LED {
   private:
     bool fade_state;
 };
-
-#endif //ifndef __LED_h

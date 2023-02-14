@@ -18,8 +18,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef __GPSCnx_h
-#define __GPSCnx_h
+#pragma once
 #include "commons.h"
 
 #include "driver/uart.h"
@@ -103,5 +102,3 @@ class GPSL96Cnx: public GPSPPSUARTCnx {
   public:
     GPSL96Cnx(Config *config, TinyGPSPlus *gps);
 };
-
-#endif //ifndef __GPSCnx_h

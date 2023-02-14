@@ -22,8 +22,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef __TinyGPSPlus_h
-#define __TinyGPSPlus_h
+#pragma once
 
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"
@@ -286,5 +285,3 @@ private:
   int fromHex(char a);
   bool endOfTermHandler();
 };
-
-#endif // def(__TinyGPSPlus_h)

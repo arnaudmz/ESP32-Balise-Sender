@@ -19,8 +19,7 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef __commons_h
-#define __commons_h
+#pragma once
 #include "driver/uart.h"
 
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -29,5 +28,3 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #else
 #define UART_SOURCE UART_SCLK_REF_TICK
 #endif
-
-#endif //ifndef __commons_h

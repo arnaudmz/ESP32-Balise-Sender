@@ -18,8 +18,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-#ifndef __Beacon_h
-#define __Beacon_h
+#pragma once
 #include "nvs.h"
 #include "Config.h"
 #include "LED.h"
@@ -69,4 +68,3 @@ class Beacon {
     uint64_t gpsSec = 0;
     uint16_t lastPrefix = 0;
 };
-#endif //ifndef __Beacon_h
